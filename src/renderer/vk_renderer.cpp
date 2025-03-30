@@ -1,8 +1,13 @@
 #include <vulkan/vulkan.h>
-#include <iostream>
 
-int main()
+struct VkContext
 {
+    VkInstance instance;
+};
+
+bool vk_init(VkContext *vkcontext)
+{
+
     VkApplicationInfo appInfo = {};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     appInfo.pApplicationName = "Chip8Emulator";
@@ -12,14 +17,10 @@ int main()
     instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
     instanceInfo.pApplicationInfo = &appInfo;
 
-    VkInstance instance;
-
-    VkResult result = vkCreateInstance(&instanceInfo, 0, &instance);
+    VkResult result = vkCreateInstance(&instanceInfo, 0, &vkcontext->instance);
 
     if (result == VK_SUCCESS)
-    {
-        std::cout << "Succesfully created vulkan instance" << std::endl;
-    }
+        return true;
 
-    return 0;
+    return false;
 }
