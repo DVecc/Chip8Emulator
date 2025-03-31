@@ -14,7 +14,7 @@ LRESULT CALLBACK platform_window_callback(HWND window, UINT msg, WPARAM wParam, 
     return DefWindowProcA(window, msg, wParam, lParam);
 }
 
-bool platform_create_window(HWND window)
+bool platform_create_window(HWND *window)
 {
     HINSTANCE instance = GetModuleHandleA(0);
 
@@ -26,11 +26,11 @@ bool platform_create_window(HWND window)
 
     if (!RegisterClassA(&wc))
     {
-        MessageBoxA(window, "Failed to register window class", "Error", MB_ICONEXCLAMATION | MB_OK);
+        MessageBoxA(0, "Failed to register window class", "Error", MB_ICONEXCLAMATION | MB_OK);
         return false;
     }
 
-    window = CreateWindowExA(
+    *window = CreateWindowExA(
         WS_EX_APPWINDOW,
         "vulkan_engine_class",
         "Chip8Emulator",
@@ -38,11 +38,11 @@ bool platform_create_window(HWND window)
 
     if (window == 0)
     {
-        MessageBoxA(window, "Failed to create Window", "Error", MB_ICONEXCLAMATION | MB_OK);
+        MessageBoxA(0, "Failed to create Window", "Error", MB_ICONEXCLAMATION | MB_OK);
         return false;
     }
 
-    ShowWindow(window, SW_SHOW);
+    ShowWindow(*window, SW_SHOW);
     return true;
 }
 
@@ -61,12 +61,12 @@ int main()
 {
     VkContext vkcontext = {};
     HWND window = 0;
-    if (!platform_create_window(window))
+    if (!platform_create_window(&window))
     {
         return -1;
     }
 
-    if (!vk_init(&vkcontext))
+    if (!vk_init(&vkcontext, window))
     {
         return -1;
     }
@@ -74,6 +74,7 @@ int main()
     while (running)
     {
         platform_update_window(window);
+        vk_render(&vkcontext);
     }
 
     return 0;
