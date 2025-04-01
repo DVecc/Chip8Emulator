@@ -9,3 +9,17 @@ SET defines=/D DEBUG
 echo "Building Main..."
 
 cl /EHsc /Z7 /Fe"main"  %includes% %defines% src/platform/win32_platform.cpp %links%
+
+echo "Compiling Shaders..."
+
+for /r %%i in ("assets\shaders\*") do (
+
+    if NOT "%%~xi" == ".spv" (
+
+        echo compiling %%i
+
+        "C:\VulkanSDK\1.4.309.0\Bin\glslc.exe" %%i -o %%i.spv
+
+    )
+
+)

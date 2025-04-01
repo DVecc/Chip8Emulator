@@ -40,6 +40,8 @@ struct VkContext
     VkSemaphore submitSemaphore;
     VkSemaphore acquireSemaphore;
     VkRenderPass renderPass;
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
 
     // TODO: Suballocation from Main Memory
     VkImage scImages[5];
@@ -273,6 +275,118 @@ bool vk_init(VkContext *vkcontext, void *window)
         }
     }
 
+    // Pipeline Layout
+    {
+        VkPipelineLayoutCreateInfo layoutInfo = {};
+        layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+
+        VK_CHECK(vkCreatePipelineLayout(vkcontext->device,&layoutInfo, 0, &vkcontext->layout));
+    }
+
+
+    // Pipeline
+    {
+        VkShaderModule vertexShader, fragmentShader;
+        uint32_t sizeInBytes;
+        char *code = platform_read_file("assets/shaders/shader.vert.spv", &sizeInBytes);
+
+        VkShaderModuleCreateInfo shaderInfo = {};
+        shaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        shaderInfo.pCode = (uint32_t *)code;
+        shaderInfo.codeSize = sizeInBytes;
+        VK_CHECK(vkCreateShaderModule(vkcontext->device, &shaderInfo, 0, &vertexShader));
+        // TODO: Suballocation from main allocation
+        delete code;
+
+        code = platform_read_file("assets/shaders/shader.frag.spv", &sizeInBytes);
+        shaderInfo.pCode = (uint32_t *)code;
+        shaderInfo.codeSize = sizeInBytes;
+        VK_CHECK(vkCreateShaderModule(vkcontext->device, &shaderInfo, 0, &fragmentShader));
+        // TODO: Suballocation from main allocation
+        delete code;
+
+        VkPipelineShaderStageCreateInfo vertexStage = {};
+        vertexStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        vertexStage.pName = "main";
+        vertexStage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        vertexStage.module = vertexShader;
+
+        VkPipelineShaderStageCreateInfo fragmentStage = {};
+        fragmentStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        fragmentStage.pName = "main";
+        fragmentStage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        fragmentStage.module = fragmentShader;
+
+        VkPipelineShaderStageCreateInfo shaderStages[] = {
+            vertexStage,
+            fragmentStage};
+
+        VkPipelineVertexInputStateCreateInfo vertexInputState = {};
+        vertexInputState.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+        VkPipelineColorBlendAttachmentState colorAttachment = {};
+        colorAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        colorAttachment.blendEnable = VK_FALSE;
+
+        VkPipelineColorBlendStateCreateInfo colorBlendState = {};
+        colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        colorBlendState.pAttachments = &colorAttachment;
+        colorBlendState.attachmentCount = 1;
+
+        VkPipelineRasterizationStateCreateInfo rasterizationState = {};
+        rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
+        rasterizationState.cullMode = VK_CULL_MODE_BACK_BIT;
+        rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
+        rasterizationState.lineWidth = 1.0f;
+
+        VkRect2D scissor = {};
+        VkViewport viewport = {};
+    
+        VkPipelineMultisampleStateCreateInfo multisampleState = {};
+        multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+        VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
+        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+
+        VkPipelineViewportStateCreateInfo viewPortState = {};
+        viewPortState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewPortState.scissorCount = 1;
+        viewPortState.viewportCount = 1;
+        viewPortState.pScissors = &scissor;
+        viewPortState.pViewports = &viewport;
+
+        VkDynamicState dynamicStates[] = {
+            VK_DYNAMIC_STATE_SCISSOR,
+            VK_DYNAMIC_STATE_VIEWPORT
+        };
+
+        VkPipelineDynamicStateCreateInfo dynamicState = {};
+        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamicState.pDynamicStates = dynamicStates;
+        dynamicState.dynamicStateCount = ArraySize(dynamicStates);
+
+
+        VkGraphicsPipelineCreateInfo pipeInfo = {};
+        pipeInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipeInfo.pVertexInputState = &vertexInputState;
+        pipeInfo.pColorBlendState = &colorBlendState;
+        pipeInfo.pStages = shaderStages;
+        pipeInfo.stageCount = ArraySize(shaderStages);
+        pipeInfo.pRasterizationState = &rasterizationState;
+        pipeInfo.layout = vkcontext->layout;
+        pipeInfo.renderPass = vkcontext->renderPass;
+        pipeInfo.pViewportState = &viewPortState;
+        pipeInfo.pDynamicState = &dynamicState;
+        pipeInfo.pMultisampleState = &multisampleState;
+        pipeInfo.pInputAssemblyState = &inputAssembly;
+
+        VK_CHECK(vkCreateGraphicsPipelines(vkcontext->device, 0, 1, &pipeInfo, 0, &vkcontext->pipeline));
+    }
+
     // Command Pool
     {
         VkCommandPoolCreateInfo poolInfo = {};
@@ -326,6 +440,19 @@ bool vk_render(VkContext *vkcontext)
 
     // Rendering Commands
     {
+        VkRect2D scissor = {};
+        scissor.extent = vkcontext->screenSize;
+
+        VkViewport viewport = {};
+        viewport.height = vkcontext->screenSize.height;
+        viewport.width = vkcontext->screenSize.width;
+        viewport.maxDepth = 1.0f;
+
+        vkCmdSetScissor(cmd, 0, 1, &scissor);
+        vkCmdSetViewport(cmd, 0, 1, &viewport);
+
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS ,vkcontext->pipeline);
+        vkCmdDraw(cmd, 3, 1, 0, 0,);
     }
 
     vkCmdEndRenderPass(cmd);
