@@ -1,7 +1,10 @@
 #include <windows.h>
+#include "defines.h"
+#include "platform.h"
 #include "renderer/vk_renderer.cpp"
 
-static bool running = TRUE;
+global_variable bool running = TRUE;
+global_variable HWND window;
 
 LRESULT CALLBACK platform_window_callback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -14,7 +17,7 @@ LRESULT CALLBACK platform_window_callback(HWND window, UINT msg, WPARAM wParam, 
     return DefWindowProcA(window, msg, wParam, lParam);
 }
 
-bool platform_create_window(HWND *window)
+bool platform_create_window()
 {
     HINSTANCE instance = GetModuleHandleA(0);
 
@@ -30,7 +33,7 @@ bool platform_create_window(HWND *window)
         return false;
     }
 
-    *window = CreateWindowExA(
+    window = CreateWindowExA(
         WS_EX_APPWINDOW,
         "vulkan_engine_class",
         "Chip8Emulator",
@@ -42,7 +45,7 @@ bool platform_create_window(HWND *window)
         return false;
     }
 
-    ShowWindow(*window, SW_SHOW);
+    ShowWindow(window, SW_SHOW);
     return true;
 }
 
@@ -60,8 +63,7 @@ void platform_update_window(HWND window)
 int main()
 {
     VkContext vkcontext = {};
-    HWND window = 0;
-    if (!platform_create_window(&window))
+    if (!platform_create_window())
     {
         return -1;
     }
@@ -78,4 +80,12 @@ int main()
     }
 
     return 0;
+}
+
+void platform_get_window_size(uint32_t *width, uint32_t *height){
+    RECT rect;
+    GetClientRect(window, &rect);
+
+    *width = rect.right - rect.left;
+    *height = rect.bottom - rect.top;
 }
