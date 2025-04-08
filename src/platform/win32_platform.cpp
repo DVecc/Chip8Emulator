@@ -82,7 +82,8 @@ int main()
     return 0;
 }
 
-void platform_get_window_size(uint32_t *width, uint32_t *height){
+void platform_get_window_size(uint32_t *width, uint32_t *height)
+{
     RECT rect;
     GetClientRect(window, &rect);
 
@@ -90,38 +91,40 @@ void platform_get_window_size(uint32_t *width, uint32_t *height){
     *height = rect.bottom - rect.top;
 }
 
-char* platform_read_file(char *path, uint32_t *length) {
-    char* result = 0;
+char *platform_read_file(char *path, uint32_t *length)
+{
+    char *result = 0;
 
-    HANDLE file = (path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
-    if(file != INVALID_HANDLE_VALUE)
+    HANDLE file = CreateFileA(path, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+    if (file != INVALID_HANDLE_VALUE)
     {
         LARGE_INTEGER size;
-        if(GetFileSizeEx(file, &size))
+        if (GetFileSizeEx(file, &size))
         {
-            *length = (uint32_t) size.QuadPart;
+            *length = (uint32_t)size.QuadPart;
             result = new char[*length];
 
-            
             DWORD bytesRead;
-            if(ReadFile(file, result, *length, &bytesRead, 0))
+            if (ReadFile(file, result, *length, &bytesRead, 0))
             {
-
             }
-            else {
-                //TODO: ASSERT
+            else
+            {
+                // TODO: ASSERT
                 std::cout << "Failed to read file" << std::endl;
             }
         }
-        else {
+        else
+        {
             // TODO: ASSERT
-            std::cout<<"Failed to get file size" << std::endl;
+            std::cout << "Failed to get file size" << std::endl;
         }
 
         CloseHandle(file);
     }
-    else {
-        //TODO: ASSERT
+    else
+    {
+        // TODO: ASSERT
         std::cout << "Failed opening file" << std::endl;
     }
 

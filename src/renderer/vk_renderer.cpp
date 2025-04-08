@@ -4,6 +4,8 @@
 #include <Windows.h>
 #include "platform.h"
 #include "defines.h"
+#include "dds_structs.h"
+#include "vk_types.h"
 
 #define ArraySize(arr) sizeof((arr)) / sizeof((arr[0]))
 #define VK_CHECK(result)                                       \
@@ -42,7 +44,7 @@ struct VkContext
     VkRenderPass renderPass;
     VkPipeline pipeline;
     VkPipelineLayout layout;
-
+    Image image;
     // TODO: Suballocation from Main Memory
     VkImage scImages[5];
     VkImageView scImageViews[5];
@@ -280,9 +282,8 @@ bool vk_init(VkContext *vkcontext, void *window)
         VkPipelineLayoutCreateInfo layoutInfo = {};
         layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 
-        VK_CHECK(vkCreatePipelineLayout(vkcontext->device,&layoutInfo, 0, &vkcontext->layout));
+        VK_CHECK(vkCreatePipelineLayout(vkcontext->device, &layoutInfo, 0, &vkcontext->layout));
     }
-
 
     // Pipeline
     {
@@ -342,7 +343,7 @@ bool vk_init(VkContext *vkcontext, void *window)
 
         VkRect2D scissor = {};
         VkViewport viewport = {};
-    
+
         VkPipelineMultisampleStateCreateInfo multisampleState = {};
         multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
@@ -350,7 +351,6 @@ bool vk_init(VkContext *vkcontext, void *window)
         VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
         inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
         inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-
 
         VkPipelineViewportStateCreateInfo viewPortState = {};
         viewPortState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -361,14 +361,12 @@ bool vk_init(VkContext *vkcontext, void *window)
 
         VkDynamicState dynamicStates[] = {
             VK_DYNAMIC_STATE_SCISSOR,
-            VK_DYNAMIC_STATE_VIEWPORT
-        };
+            VK_DYNAMIC_STATE_VIEWPORT};
 
         VkPipelineDynamicStateCreateInfo dynamicState = {};
         dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
         dynamicState.pDynamicStates = dynamicStates;
         dynamicState.dynamicStateCount = ArraySize(dynamicStates);
-
 
         VkGraphicsPipelineCreateInfo pipeInfo = {};
         pipeInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -385,6 +383,53 @@ bool vk_init(VkContext *vkcontext, void *window)
         pipeInfo.pInputAssemblyState = &inputAssembly;
 
         VK_CHECK(vkCreateGraphicsPipelines(vkcontext->device, 0, 1, &pipeInfo, 0, &vkcontext->pipeline));
+        vkDestroyShaderModule(vkcontext->device, vertexShader, 0);
+        vkDestroyShaderModule(vkcontext->device, fragmentShader, 0);
+    }
+
+    // Create Image
+    {
+        uint32_t fileSize;
+        DDSFile *data = (DDSFile *)platform_read_file("assets/textures.cakez.DDS", &fileSize);
+
+        // TODO: Assertions
+        VkImageCreateInfo imgInfo = {};
+        imgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imgInfo.mipLevels = 1;
+        imgInfo.arrayLayers = 1;
+        imgInfo.imageType = VK_IMAGE_TYPE_2D;
+        imgInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+        imgInfo.extent = {data->header.Width, data->header.Height, 1};
+        imgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imgInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        // imgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        VK_CHECK(vkCreateImage(vkcontext->device, &imgInfo, 0, &vkcontext->image.image));
+        
+        VkMemoryRequirements memRequirements;
+        vkGetImageMemoryRequirements(vkcontext->device, vkcontext->image.image, &memRequirements);
+
+        VkPhysicalDeviceMemoryProperties gpuMemProps;
+        vkGetPhysicalDeviceMemoryProperties(vkcontext->gpu, &gpuMemProps);
+        
+        VkMemoryAllocateInfo allocInfo = {};
+        
+        for(uint32_t i = 0; i < gpuMemProps.memoryTypeCount; i++)
+        {
+            if(memRequirements.memoryTypeBits & (1 << i) && (gpuMemProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+            {
+                allocInfo.memoryTypeIndex = i;
+            }
+        }
+        
+       
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.allocationSize = data->header.Width * data->header.Height * 4;
+        
+       
+        VK_CHECK(vkAllocateMemory(vkcontext->device, &allocInfo, 0, &vkcontext->image.memory));
+        VK_CHECK(vkBindImageMemory(vkcontext->device, vkcontext->image.image, vkcontext->image.memory, 0));
+
+        
     }
 
     // Command Pool
@@ -451,8 +496,8 @@ bool vk_render(VkContext *vkcontext)
         vkCmdSetScissor(cmd, 0, 1, &scissor);
         vkCmdSetViewport(cmd, 0, 1, &viewport);
 
-        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS ,vkcontext->pipeline);
-        vkCmdDraw(cmd, 3, 1, 0, 0,);
+        vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, vkcontext->pipeline);
+        vkCmdDraw(cmd, 3, 1, 0, 0);
     }
 
     vkCmdEndRenderPass(cmd);
