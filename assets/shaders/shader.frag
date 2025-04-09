@@ -9,5 +9,12 @@ layout(set = 0, binding = 0) uniform sampler2D sprite;
 
 void main()
     {
-        fragmentColor = texture(sprite, uv);
+        vec4 color = texture(sprite, uv);
+        if(color.a == 0)
+        {
+            discard;
+        }
+            
+
+        fragmentColor = color;
     }

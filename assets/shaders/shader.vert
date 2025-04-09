@@ -7,7 +7,7 @@ vec4 vertices[6] =
     // Bottom Left
     vec4(-0.5, 0.5, 0.0, 1.0),
     // Top Left
-    vec4(-.05, -0.5, 0.0, 0.0),
+    vec4(-0.5, -0.5, 0.0, 0.0),
     // Top Right
     vec4(0.5, -0.5, 1.0, 0.0),
     // Top Right
