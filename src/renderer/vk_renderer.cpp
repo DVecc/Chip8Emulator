@@ -1,21 +1,13 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_win32.h>
-#include <iostream>
 #include <Windows.h>
 #include "platform.h"
 #include "defines.h"
 #include "dds_structs.h"
 #include "vk_types.h"
 #include "vk_init.cpp"
-
-#define ArraySize(arr) sizeof((arr)) / sizeof((arr[0]))
-#define VK_CHECK(result)                                       \
-    if (result != VK_SUCCESS)                                  \
-    {                                                          \
-        std::cout << "Vulkan: Error: " << result << std::endl; \
-        __debugbreak();                                        \
-        return false;                                          \
-    }
+#include "logger.h"
+#include "vk_util.cpp"
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
@@ -23,7 +15,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
     const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
     void *pUserData)
 {
-    std::cout << "Validation Error: " << pCallbackData->pMessage << std::endl;
+    ASSERT(0, pCallbackData->pMessage);
     return false;
 }
 
@@ -411,33 +403,8 @@ bool vk_init(VkContext *vkcontext, void *window)
 
     // Staging Buffer
     {
-        VkBufferCreateInfo bufferInfo = {};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.usage = VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT;
-        bufferInfo.size = MB(1);
-        VK_CHECK(vkCreateBuffer(vkcontext->device, &bufferInfo, 0, &vkcontext->StagingBuffer.buffer));
-
-        VkMemoryRequirements memRequirements;
-        vkGetBufferMemoryRequirements(vkcontext->device, vkcontext->StagingBuffer.buffer, &memRequirements);
-
-        VkPhysicalDeviceMemoryProperties gpuMemProps;
-        vkGetPhysicalDeviceMemoryProperties(vkcontext->gpu, &gpuMemProps);
-
-        VkMemoryAllocateInfo allocInfo = {};
-        allocInfo.allocationSize = MB(1);
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-
-        for (uint32_t i = 0; i < gpuMemProps.memoryTypeCount; i++)
-        {
-            if (memRequirements.memoryTypeBits & (1 << i) && (gpuMemProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) == (VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT))
-            {
-                allocInfo.memoryTypeIndex = i;
-            }
-        }
-
-        VK_CHECK(vkAllocateMemory(vkcontext->device, &allocInfo, 0, &vkcontext->StagingBuffer.memory));
-        VK_CHECK(vkMapMemory(vkcontext->device, vkcontext->StagingBuffer.memory, 0, MB(1), 0, &vkcontext->StagingBuffer.data));
-        VK_CHECK(vkBindBufferMemory(vkcontext->device, vkcontext->StagingBuffer.buffer, vkcontext->StagingBuffer.memory, 0));
+        vkcontext->StagingBuffer = vk_allocate_buffer(vkcontext->device, vkcontext->gpu, MB(1), VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+      
     }
 
     // Command Pool
@@ -453,42 +420,10 @@ bool vk_init(VkContext *vkcontext, void *window)
         uint32_t fileSize;
         DDSFile *data = (DDSFile *)platform_read_file("assets/textures/cakez.DDS", &fileSize);
         uint32_t textureSize = data->header.Width * data->header.Height * 4;
-        memcpy(vkcontext->StagingBuffer.data, &data->dataBegin, textureSize);
+        vk_copy_to_buffer(&vkcontext->StagingBuffer, &data->dataBegin, textureSize);
 
         // TODO: Assertions
-        VkImageCreateInfo imgInfo = {};
-        imgInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        imgInfo.mipLevels = 1;
-        imgInfo.arrayLayers = 1;
-        imgInfo.imageType = VK_IMAGE_TYPE_2D;
-        imgInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-        imgInfo.extent = {data->header.Width, data->header.Height, 1};
-        imgInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-        imgInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-        // imgInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        VK_CHECK(vkCreateImage(vkcontext->device, &imgInfo, 0, &vkcontext->image.image));
-
-        VkMemoryRequirements memRequirements;
-        vkGetImageMemoryRequirements(vkcontext->device, vkcontext->image.image, &memRequirements);
-
-        VkPhysicalDeviceMemoryProperties gpuMemProps;
-        vkGetPhysicalDeviceMemoryProperties(vkcontext->gpu, &gpuMemProps);
-
-        VkMemoryAllocateInfo allocInfo = {};
-
-        for (uint32_t i = 0; i < gpuMemProps.memoryTypeCount; i++)
-        {
-            if (memRequirements.memoryTypeBits & (1 << i) && (gpuMemProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
-            {
-                allocInfo.memoryTypeIndex = i;
-            }
-        }
-
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize = textureSize;
-
-        VK_CHECK(vkAllocateMemory(vkcontext->device, &allocInfo, 0, &vkcontext->image.memory));
-        VK_CHECK(vkBindImageMemory(vkcontext->device, vkcontext->image.image, vkcontext->image.memory, 0));
+        vkcontext->image = vk_allocate_image(vkcontext->device, vkcontext->gpu, data->header.Width, data->header.Height, VK_FORMAT_R8G8B8A8_UNORM);
 
         VkCommandBuffer cmd;
         VkCommandBufferAllocateInfo cmdAlloc = cmd_alloc_info(vkcontext->commandPool);

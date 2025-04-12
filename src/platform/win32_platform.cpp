@@ -65,18 +65,24 @@ int main()
     VkContext vkcontext = {};
     if (!platform_create_window())
     {
+        LOG_FATAL("Failed to open a window");
         return -1;
     }
 
     if (!vk_init(&vkcontext, window))
     {
+        LOG_FATAL("Failed to initialize Vulkan");
         return -1;
     }
 
     while (running)
     {
         platform_update_window(window);
-        vk_render(&vkcontext);
+       if(!vk_render(&vkcontext))
+       {
+            LOG_FATAL("Failed to render Vulkan");
+            return -1;
+       }
     }
 
     return 0;
@@ -110,23 +116,63 @@ char *platform_read_file(char *path, uint32_t *length)
             }
             else
             {
-                // TODO: ASSERT
-                std::cout << "Failed to read file" << std::endl;
+               
+                ASSERT(0, "Failed to read file: %s", path);
+                LOG_ERROR("Failed to read file: %s", path);
             }
         }
         else
         {
-            // TODO: ASSERT
-            std::cout << "Failed to get file size" << std::endl;
+                ASSERT(0, "Failed to get file size: %s", path);
+                LOG_ERROR("Failed to get file size: %s", path);
         }
 
         CloseHandle(file);
     }
     else
     {
-        // TODO: ASSERT
-        std::cout << "Failed opening file" << std::endl;
+        ASSERT(0, "Failed to open file: %s", path);
+        LOG_ERROR("Failed to open file: %s", path);
     }
 
     return result;
+}
+
+void platform_log(const char* msg, TextColor color)
+{
+    HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+
+    uint32_t colorBits = 0;
+
+    switch (color)
+    {
+    case TEXT_COLOR_WHITE:
+        colorBits = FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
+        break;
+
+    case TEXT_COLOR_GREEN:
+        colorBits = FOREGROUND_GREEN;
+        break;
+
+    case TEXT_COLOR_YELLOW:
+        colorBits = FOREGROUND_BLUE | FOREGROUND_RED;
+        break;
+
+    case TEXT_COLOR_RED:
+        colorBits = FOREGROUND_RED;
+        break;
+    
+    case TEXT_COLOR_LIGHT_RED:
+        colorBits = FOREGROUND_INTENSITY | FOREGROUND_RED;
+        break;
+    }
+
+    SetConsoleTextAttribute(consoleHandle, colorBits);
+
+    
+    OutputDebugStringA(msg);
+    
+
+    WriteConsoleA(consoleHandle, msg, strlen(msg), 0, 0);
+
 }
