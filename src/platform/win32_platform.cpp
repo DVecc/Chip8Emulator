@@ -1,7 +1,9 @@
 #include <windows.h>
 #include "defines.h"
 #include "platform.h"
+#include "Game/game.cpp"
 #include "renderer/vk_renderer.cpp"
+
 
 global_variable bool running = TRUE;
 global_variable HWND window;
@@ -63,6 +65,7 @@ void platform_update_window(HWND window)
 int main()
 {
     VkContext vkcontext = {};
+    GameState gameState = {};
     if (!platform_create_window())
     {
         LOG_FATAL("Failed to open a window");
@@ -75,10 +78,18 @@ int main()
         return -1;
     }
 
+    if(!init_game(&gameState))
+    {
+        LOG_FATAL("Failed to initialize Game");
+        return -1;
+    
+    }
+
     while (running)
     {
         platform_update_window(window);
-       if(!vk_render(&vkcontext))
+        update_game(&gameState);
+       if(!vk_render(&vkcontext, &gameState))
        {
             LOG_FATAL("Failed to render Vulkan");
             return -1;

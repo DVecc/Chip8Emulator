@@ -5,7 +5,7 @@ layout(location = 0)  out vec4 fragmentColor;
 
 
 
-layout(set = 0, binding = 0) uniform sampler2D sprite;
+layout(set = 0, binding = 2) uniform sampler2D sprite;
 
 void main()
     {

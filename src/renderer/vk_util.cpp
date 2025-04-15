@@ -89,23 +89,16 @@ Buffer vk_allocate_buffer(
         vkGetPhysicalDeviceMemoryProperties(gpu, &gpuMemProps);
 
         VkMemoryAllocateInfo allocInfo = {};
-        allocInfo.allocationSize = MB(1);
+        allocInfo.allocationSize = memRequirements.size;
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-
-        for (uint32_t i = 0; i < gpuMemProps.memoryTypeCount; i++)
-        {
-            if (memRequirements.memoryTypeBits & (1 << i) && (gpuMemProps.memoryTypes[i].propertyFlags & memProps) == memProps)
-            {
-                allocInfo.memoryTypeIndex = i;
-            }
-        }
+        allocInfo.memoryTypeIndex = vk_get_memory_type_index(gpu, memRequirements, memProps);
 
         VK_CHECK(vkAllocateMemory(device, &allocInfo, 0, &buffer.memory));
 
         // Only map memory we can actually write to from the CPU
         if (memProps & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
         {
-             VK_CHECK(vkMapMemory(device, buffer.memory, 0, MB(1), 0, &buffer.data));
+             VK_CHECK(vkMapMemory(device, buffer.memory, 0, memRequirements.size, 0, &buffer.data));
         }
        
         VK_CHECK(vkBindBufferMemory(device, buffer.buffer, buffer.memory, 0));
