@@ -2,6 +2,7 @@
 #include "defines.h"
 #include "platform.h"
 #include "Game/game.cpp"
+#include "assets/assets.cpp"
 #include "renderer/vk_renderer.cpp"
 
 
