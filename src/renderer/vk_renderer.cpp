@@ -15,6 +15,7 @@
 uint32_t constexpr MAX_IMAGES = 100;
 uint32_t constexpr MAX_DESCRIPTORS = 100;
 uint32_t constexpr MAX_RENDER_COMMANDS = 100;
+uint32_t constexpr MAX_TRANSFORMS = MAX_ENTITIES;
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
@@ -53,11 +54,14 @@ struct VkContext
     uint32_t renderCommandCount;
     RenderCommand renderCommands[MAX_RENDER_COMMANDS];
 
+    uint32_t transformCount;
+    Transform transforms[MAX_TRANSFORMS];
 
     Buffer StagingBuffer;
     Buffer transformStorageBuffer;
     Buffer globalUBO;
     Buffer indexBuffer;
+    Buffer materialStorageBuffer;
     // TODO: Suballocation from Main Memory
     VkImage scImages[5];
     VkImageView scImageViews[5];
@@ -232,7 +236,8 @@ internal Descriptor* vk_create_descriptor(VkContext* vkcontext, AssetTypeID asse
                 DescriptorInfo descInfos [] = {
                     DescriptorInfo(vkcontext->globalUBO.buffer),
                     DescriptorInfo(vkcontext->transformStorageBuffer.buffer),
-                    DescriptorInfo(vkcontext->sampler, image->view)
+                    DescriptorInfo(vkcontext->sampler, image->view),
+                    DescriptorInfo(vkcontext->materialStorageBuffer.buffer)
                 };
 
                 VkWriteDescriptorSet writes [] = {
@@ -241,7 +246,9 @@ internal Descriptor* vk_create_descriptor(VkContext* vkcontext, AssetTypeID asse
                     write_set(desc->set, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                  &descInfos[1], 1, 1),
                     write_set(desc->set, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                                &descInfos[2], 2, 1)
+                                &descInfos[2], 2, 1),
+                    write_set(desc->set, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                &descInfos[3], 3, 1)
                 };
 
                 vkUpdateDescriptorSets(vkcontext->device, ArraySize(writes), writes, 0, 0);
@@ -294,7 +301,9 @@ internal RenderCommand *vk_add_render_command(VkContext *vkcontext, Descriptor *
     if(vkcontext->renderCommandCount < MAX_RENDER_COMMANDS)
     {
         rc = &vkcontext->renderCommands[vkcontext->renderCommandCount++];
+        *rc = {};
         rc->desc = desc;
+        rc->pushData.transformIdx = vkcontext->transformCount;
     }
     else
     {
@@ -536,7 +545,8 @@ bool vk_init(VkContext *vkcontext, void *window)
         VkDescriptorSetLayoutBinding layoutBindings[] = {
             layout_binding(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 1, 0),
             layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_VERTEX_BIT, 1, 1),
-            layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, 2)
+            layout_binding(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, 2),
+            layout_binding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT, 1, 3)
         };
 
         VkDescriptorSetLayoutCreateInfo layoutInfo = {};
@@ -719,6 +729,16 @@ bool vk_init(VkContext *vkcontext, void *window)
             VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
     }
 
+    // Create Material Storage Buffer
+    {
+        vkcontext->materialStorageBuffer = vk_allocate_buffer(
+            vkcontext->device,
+            vkcontext->gpu,
+            sizeof(MaterialData) * MAX_MATERIALS,
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    }
+
     // Create Global Uniform Buffer Object
     {
         vkcontext->globalUBO = vk_allocate_buffer(
@@ -756,7 +776,7 @@ bool vk_init(VkContext *vkcontext, void *window)
     {
         VkDescriptorPoolSize poolSizes [] = {
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
-            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2},
             {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}
 
         };
@@ -772,7 +792,7 @@ bool vk_init(VkContext *vkcontext, void *window)
 
     // Create default white Descriptor
     {
-        
+
     }
     return true;
 }
@@ -783,18 +803,41 @@ bool vk_render(VkContext *vkcontext, GameState* gameState)
 
     // Copy Transforms to the buffer
     {
-        vk_copy_to_buffer(&vkcontext->transformStorageBuffer, &gameState->entities, sizeof(Transform) * gameState->entityCount);
+        for(uint32_t i = 0; i < gameState->entityCount; i++)
+        {
+            Entity *e = &gameState->entities[i];
+            Material *m = get_material(gameState, e->transform.materialIdx);
+
+            Descriptor * desc = vk_get_descriptor(vkcontext, m->assetTypeID);
+            if(desc)
+            {
+                RenderCommand *rc = vk_add_render_command(vkcontext, desc);
+                if(rc)
+                {
+                     rc->instanceCount = 1;
+                }
+               
+            }
+        
+            vkcontext->transforms[vkcontext->transformCount++] = e->transform;
+        }
+        
     }
 
-    Descriptor * desc = vk_get_descriptor(vkcontext, ASSET_SPRITE_WHITE);
-    if(desc)
-    {
-        RenderCommand *rc = vk_add_render_command(vkcontext, desc);
-        if (rc)
+        // Copy Data to Buffers
         {
-            rc->instanceCount = gameState->entityCount;
+            vk_copy_to_buffer(&vkcontext->transformStorageBuffer, &vkcontext->transforms, sizeof(Transform) * vkcontext->transformCount);
+            vkcontext->transformCount = 0;
+
+            MaterialData materialData[MAX_MATERIALS];
+            for(uint32_t i = 0; i < gameState->materialCount; i++)
+            {
+                materialData[i] = gameState->materials[i].materialData;
+            }
+            vk_copy_to_buffer(&vkcontext->materialStorageBuffer, materialData, sizeof(MaterialData) * gameState->materialCount);
         }
-    }
+        
+    
 
     VK_CHECK(vkAcquireNextImageKHR(vkcontext->device, vkcontext->swapchain, 0, vkcontext->acquireSemaphore, 0, &imgIdx));
 
