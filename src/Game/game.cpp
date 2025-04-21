@@ -8,7 +8,16 @@
 uint32_t constexpr MAX_ENTITIES = 100;
 uint32_t constexpr MAX_MATERIALS = 100;
 
+enum Components
+{
+    COMPONENT_BALL = BIT(1),
+    COMPONENT_LEFT_PADDLE = BIT(2),
+    COMPONENT_RIGHT_PADDLE = BIT(3)
+};
+
 struct Entity {
+
+    uint32_t compMask;
     Transform transform;
 };
 
@@ -25,21 +34,23 @@ struct GameState {
     uint32_t materialCount;
     Material materials[MAX_MATERIALS];
 };
-internal Entity *create_entity(GameState *gameState, Transform transform)
+
+internal bool has_component(Entity* e, Components c)
 {
-    Entity *e = 0;
-
-    if (gameState->entityCount < MAX_ENTITIES)
-    {
-        e = &gameState->entities[gameState->entityCount++];
-        e->transform = transform;
-    }
-    else {
-        ASSERT(0, "Reached Maximum amount of Entities!");
-    }
-
-    return e;
+   return e->compMask & c;
 }
+
+internal void add_component(Entity* e, Components c)
+{
+   e->compMask |= c;
+}
+
+internal void remove_component(Entity* e, Components c)
+{
+    e->compMask &= ~c;
+}
+
+
 
 internal uint32_t create_material(GameState *GameState, AssetTypeID assetTypeID,
                                   Vec4 color = {1.0f, 1.0f, 1.0f, 1.0f})
@@ -94,55 +105,60 @@ internal Material *get_material(GameState *gameState, uint32_t materialIdx)
     return m;
 }
 
-bool init_game(GameState*  gameState) {
+internal Entity *create_entity(GameState *gameState, Transform transform)
+{
+    Entity *e = 0;
 
-    uint32_t counter = 0;
-    for (uint32_t i = 0; i < 10; i++)
+    if (gameState->entityCount < MAX_ENTITIES)
     {
-        for (uint32_t j = 0; j < 10; j++)
-        {
-            float r = (float)counter / 100.f;
-            float g = r;
-            float b = 1.0f - r;
-            float a = r;
-
-           Entity* e = create_entity(gameState, {i* 120.0f, j * 60.0f, 70.0f, 70.0f});
-        e->transform.materialIdx = create_material(gameState, ASSET_SPRITE_CAKEZ, {r,g,b,a});
-            counter++;
-        }
+        e = &gameState->entities[gameState->entityCount++];
+        e->transform = transform;
     }
-    
+    else {
+        ASSERT(0, "Reached Maximum amount of Entities!");
+    }
+
+    return e;
+}
+
+bool init_game(GameState*  gameState) 
+{
+    float paddleSizeX = 50.0f, paddleSizeY = 100.0f, ballSize = 50.0f;
+
+    Entity *e = create_entity(gameState, {10.0f, 10.0f, paddleSizeX, paddleSizeY});
+    add_component(e, COMPONENT_LEFT_PADDLE);
+    e->transform.materialIdx = get_material(gameState, ASSET_SPRITE_PADDLE);
+
+    e = create_entity(gameState, {1000.0f - paddleSizeX - 20.0f, 10.0f, paddleSizeX, paddleSizeY});
+    add_component(e, COMPONENT_RIGHT_PADDLE);
+    e->transform.materialIdx = get_material(gameState, ASSET_SPRITE_PADDLE);
+
+    e = create_entity(gameState, {1000.0f / 2.0f, 400.0f, ballSize, ballSize});
+    add_component(e, COMPONENT_BALL);
+    e->transform.materialIdx = get_material(gameState, ASSET_SPRITE_BALL);
+   
 
     return true;
 }
-
 void update_game(GameState* gameState, InputState *input) 
 {
-    float xVel = 0.0f;
-    float yVel = 0.0f;
-
-    if (key_is_down(input, A_KEY))
-    {
-        xVel = -0.1f;
-    }
-    if (key_is_down(input, D_KEY))
-    {
-        xVel = 0.1f;
-    }
-    if(key_pressed_this_frame(input, W_KEY))
-    {
-        yVel = -10.0f;
-    }
-    if(key_pressed_this_frame(input, S_KEY))
-    {
-        yVel = 10.0f;
-    }
+    float vel = 0.5f;
 
     for (uint32_t i = 0; i < gameState->entityCount; i++)
     {
         Entity* e = &gameState->entities[i];
-        e->transform.xPos += xVel;
-        e->transform.yPos += yVel;
+        
+        if(has_component(e, COMPONENT_LEFT_PADDLE))
+        {
+            if (key_is_down(input, W_KEY))
+            {
+                e->transform.yPos -= vel;
+            }
+            if (key_is_down(input, S_KEY))
+            {
+                e->transform.yPos += vel;
+            }
+        }
     }
 
 };

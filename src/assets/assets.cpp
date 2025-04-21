@@ -24,6 +24,27 @@ const char* get_asset(AssetTypeID assetTypeID)
             return data;
         }break;
 
+        case ASSET_SPRITE_BALL:
+        {
+            uint32_t fileSize;
+            const char* data = platform_read_file("assets/textures/ball.DDS", &fileSize);
+            return data;
+        }break;
+
+        case ASSET_SPRITE_PADDLE:
+        {
+            uint32_t fileSize;
+            const char* data = platform_read_file("assets/textures/paddle.DDS", &fileSize);
+            return data;
+        }break;
+
+        case ASSET_SPRITE_ISABELLE:
+        {
+            uint32_t fileSize;
+            const char* data = platform_read_file("assets/textures/Left_side_solo_square-removebg-preview.DDS", &fileSize);
+            return data;
+        }
+
         default:
             ASSERT(0, "Unrecognized AssetTypeID: %d", assetTypeID);
             
