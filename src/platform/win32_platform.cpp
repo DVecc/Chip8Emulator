@@ -2,6 +2,7 @@
 #include "defines.h"
 #include "platform.h"
 #include "Game/game.cpp"
+#include "ui/ui.cpp"
 #include "assets/assets.cpp"
 #include "renderer/vk_renderer.cpp"
 #include "input.cpp"
@@ -138,6 +139,7 @@ int main()
     input.screenSize = {1000, 700};
     VkContext vkcontext = {};
     GameState gameState = {};
+    UIState ui = {};
     if (!platform_create_window(input.screenSize))
     {
         LOG_FATAL("Failed to open a window");
@@ -190,9 +192,9 @@ int main()
             // time in seconds 
             dt /=1000.0f;
         }
-
-        update_game(&gameState, &input, dt);
-       if(!vk_render(&vkcontext, &gameState))
+        update_ui(&ui);
+        update_game(&gameState, &ui, &input, dt);
+       if(!vk_render(&vkcontext, &gameState, &ui))
        {
             LOG_FATAL("Failed to render Vulkan");
             return -1;

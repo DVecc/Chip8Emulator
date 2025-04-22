@@ -45,6 +45,14 @@ const char* get_asset(AssetTypeID assetTypeID)
             const char* data = platform_read_file("assets/textures/Left_side_solo_square-removebg-preview.DDS", &fileSize);
             return data;
         }
+        break;
+
+        case ASSET_SPRITE_FONT_ATLAS:
+        {
+            uint32_t fileSize;
+            const char* data = platform_read_file("assets/textures/Font_Atlas_mono_5_10.dds", &fileSize);
+            return data;
+        }
 
         default:
             ASSERT(0, "Unrecognized AssetTypeID: %d", assetTypeID);
@@ -54,31 +62,43 @@ const char* get_asset(AssetTypeID assetTypeID)
         return 0;
 }
 
-Vec2 get_texture_size(AssetTypeID AssetTypeID)
+Texture get_texture(AssetTypeID AssetTypeID)
 {
-    Vec2 size = {};
+    Texture texture = {};
     switch (AssetTypeID)
     {
         case ASSET_SPRITE_WHITE:
         {
-            size = {1.0f, 1.0f};
+            texture.size = {1.0f, 1.0f};
+            texture.subSize = texture.size;
+            
         }
         break;
 
         case ASSET_SPRITE_BALL:
         {
-           size = {50.0f, 50.0f};    
+           texture.size = {50.0f, 50.0f};   
+           texture.subSize = texture.size; 
         }
         break;
 
         case ASSET_SPRITE_PADDLE:
         {
-           size = {50.0f, 100.0f};
+           texture.size = {50.0f, 100.0f};
+           texture.subSize = texture.size;
         }break;
 
         case ASSET_SPRITE_ISABELLE:
         {
-            size = {50.0f, 50.0f};
+            texture.size = {50.0f, 50.0f};
+            texture.subSize = texture.size;
+        }
+        break;
+
+        case ASSET_SPRITE_FONT_ATLAS:
+        {
+            texture.size = {240.0f, 240.0f};
+            texture.subSize = {15.0f, 30.0f};
         }
         break;
         default:
@@ -88,5 +108,5 @@ Vec2 get_texture_size(AssetTypeID AssetTypeID)
         }
     }
 
-    return size;
+    return texture;
 }

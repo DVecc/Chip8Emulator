@@ -1,16 +1,17 @@
 #include <vulkan/vulkan.h>
+#ifdef WINDOWS_BUILD
 #include <vulkan/vulkan_win32.h>
-#include <Windows.h>
-#include "platform.h"
-#include "defines.h"
+#elif LINUX_BUILD
+#endif
+
 #include "dds_structs.h"
+#include "logger.h"
+#include "platform.h"
+
 #include "vk_types.h"
 #include "vk_init.cpp"
-#include "logger.h"
 #include "vk_util.cpp"
-#include "renderer/shared_render_types.h"
-#include "renderer/vk_shader_util.cpp"
-
+#include "vk_shader_util.cpp"
 uint32_t constexpr MAX_IMAGES = 100;
 uint32_t constexpr MAX_DESCRIPTORS = 100;
 uint32_t constexpr MAX_RENDER_COMMANDS = 100;
@@ -309,6 +310,60 @@ internal RenderCommand *vk_add_render_command(VkContext *vkcontext, Descriptor *
     }
 
     return rc;
+}
+
+internal void vk_add_transform(VkContext* vkcontext,
+                                uint32_t materialIdx,
+                                AssetTypeID assetTypeId,
+                                Vec2 pos,
+                                uint32_t animationIdx = 0)
+{
+    Texture texture = get_texture(assetTypeId);
+
+    uint32_t cols = texture.size.x / texture.subSize.x;
+    uint32_t rows = texture.size.y / texture.subSize.y;
+
+    float uvWidth = 1.0f / (float)cols;
+    float uvHeight = 1.0f / (float)rows;
+
+            Transform t = {};
+            t.materialIdx = materialIdx;
+            t.xPos = pos.x;
+            t.yPos = pos.y;
+            t.sizeX = texture.subSize.x;
+            t.sizeY = texture.subSize.y;
+            t.topV = float(animationIdx / cols) * uvHeight;
+            t.bottomV = t.topV + uvHeight;
+            t.leftU = float(animationIdx % cols) * uvWidth;
+            t.rightU = t.leftU + uvWidth;
+            vkcontext->transforms[vkcontext->transformCount++] = t;
+}
+
+internal void vk_render_text(VkContext *vkcontext, RenderCommand * rc, uint32_t materialIdx, char * text, Vec2 origin)
+{
+    float originX = origin.x;
+    while(char c = *(text++))
+                        {
+                            if( c < 0)
+                            {
+                                continue;
+                            }
+                            if( c == ' ')
+                            {
+                                origin.x += 15.0f;
+                                continue;
+                            }
+                            if( c == '\n')
+                            {
+                                origin.y += 15.0f;
+                                origin.x = originX;
+                                continue;
+                            }
+        
+                            vk_add_transform(vkcontext, materialIdx, ASSET_SPRITE_FONT_ATLAS, origin, c);
+                            rc->instanceCount++;
+                            origin.x+=15.0f;
+                        }
 }
 
 bool vk_init(VkContext *vkcontext, void *window)
@@ -790,7 +845,7 @@ bool vk_init(VkContext *vkcontext, void *window)
     return true;
 }
 
-bool vk_render(VkContext *vkcontext, GameState *gameState)
+bool vk_render(VkContext *vkcontext, GameState *gameState, UIState *ui)
 {
     uint32_t imgIdx;
 
@@ -811,18 +866,39 @@ bool vk_render(VkContext *vkcontext, GameState *gameState)
                 }
             }
 
-            Vec2 textureSize = get_texture_size(m->assetTypeID);
-
-            Transform t = {};
-            t.materialIdx = e->materialIdx;
-            t.xPos = e->origin.x + e->spriteOffset.x;
-            t.yPos = e->origin.y + e->spriteOffset.y;
-            t.sizeX = textureSize.x;
-            t.sizeY = textureSize.y;
-
-            vkcontext->transforms[vkcontext->transformCount++] = t;
+            vk_add_transform(vkcontext, e->materialIdx, m->assetTypeID, e->origin+e->spriteOffset);
         }
     }
+
+    // UI Rendering
+    {
+        if(ui->labelCount)
+        {
+            Descriptor *desc = vk_get_descriptor(vkcontext, ASSET_SPRITE_FONT_ATLAS);
+            if(desc)
+            {
+                RenderCommand *rc = vk_add_render_command(vkcontext, desc);
+
+                if(rc)
+                {
+                    for(uint32_t labelIdx = 0; labelIdx < ui->labelCount; labelIdx++)
+                    {
+                        Label l = ui->labels[labelIdx];
+                        uint32_t materialIdx = get_material(gameState, ASSET_SPRITE_FONT_ATLAS);
+                        
+                        float originX = l.pos.x;
+        
+                        vk_render_text(vkcontext, rc, materialIdx, l.text, l.pos);
+        
+                    }
+                }
+           
+           
+            }
+            
+        }
+    }
+
 
     // Copy Data to Buffers
     {

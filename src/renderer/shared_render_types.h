@@ -10,7 +10,7 @@ struct GlobalData{
 
 struct Transform
 {
-    float xPos, yPos, sizeX, sizeY;
+    float xPos, yPos, sizeX, sizeY, topV, bottomV, leftU, rightU;
     int materialIdx;
 };
 
