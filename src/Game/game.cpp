@@ -3,11 +3,10 @@
 #include "logger.h"
 #include "../renderer/my_math.h"
 #include "input.h"
-#include "renderer/shared_render_types.h"
 #include "ui/ui.h"
 
 uint32_t constexpr MAX_ENTITIES = 100;
-uint32_t constexpr MAX_MATERIALS = 100;
+
 
 enum Components
 {
@@ -19,25 +18,26 @@ enum Components
 struct Entity {
 
     uint32_t compMask;
-    uint32_t materialIdx;
+    AssetTypeID assetTypeID;
+    Vec4 color;
     Vec2 origin;
     Vec2 vel;
     Vec2 spriteOffset;
     Rect boundingBox;
 };
 
-struct Material
+enum GameStateID
 {
-    AssetTypeID assetTypeID;
-    MaterialData materialData;
+    GAME_STATE_MAIN_MENU,
+    GAME_STATE_RUNNING_LEVEL
 };
 
 struct GameState {
+    GameStateID GameState;
     uint32_t entityCount;
     Entity entities[MAX_ENTITIES];
 
-    uint32_t materialCount;
-    Material materials[MAX_MATERIALS];
+   
 };
 
 internal bool has_component(Entity* e, Components c)
@@ -57,63 +57,14 @@ internal void remove_component(Entity* e, Components c)
 
 
 
-internal uint32_t create_material(GameState *GameState, AssetTypeID assetTypeID,
-                                  Vec4 color = {1.0f, 1.0f, 1.0f, 1.0f})
-{
 
-    uint32_t materialIdx = INVALID_IDX;
-
-    if(GameState->materialCount < MAX_MATERIALS)
-    {
-        materialIdx = GameState->materialCount;
-        Material *m = &GameState->materials[GameState->materialCount++];
-        m->assetTypeID = assetTypeID;
-        m->materialData.color = color;
-    }
-    else
-    {
-        ASSERT(0, "Reached maximum amount of Materials");
-    }
-
-    return materialIdx;
-}
-
-internal uint32_t get_material(GameState *gameState, AssetTypeID assetTypeID,
-                                Vec4 color = {1.0f, 1.0f, 1.0f, 1.0f})
-{
-    uint32_t materialIdx = INVALID_IDX;
-    for(uint32_t i = 0; i < gameState->materialCount; i++)
-    {
-        Material *m = &gameState->materials[i];
-        if(m->assetTypeID == assetTypeID && m->materialData.color == color)
-        {
-            materialIdx = i;
-            break;
-        }
-    }
-    if(materialIdx == INVALID_IDX)
-    {
-        materialIdx = create_material(gameState, assetTypeID, color);
-    }
-    return materialIdx;
-}
-
-internal Material *get_material(GameState *gameState, uint32_t materialIdx)
-{
-    Material *m = 0;
-
-    if(materialIdx < MAX_MATERIALS)
-    {
-        m = &gameState->materials[materialIdx];
-    }
-
-    return m;
-}
 
 internal Entity *create_entity(GameState *gameState,
                                 Vec2 origin,
                                 Vec2 spriteOffset,
-                                Rect boundingBox)
+                                Rect boundingBox,
+                                AssetTypeID assetTypeID= ASSET_SPRITE_WHITE,
+                                Vec4 color = {1.0f, 1.0f, 1.0f, 1.0f})
 {
     Entity *e = 0;
 
@@ -123,6 +74,8 @@ internal Entity *create_entity(GameState *gameState,
         e->origin = origin;
         e->spriteOffset = spriteOffset;
         e->boundingBox = boundingBox;
+        e->assetTypeID = assetTypeID;
+        e->color = color;
 
     }
     else {
@@ -150,23 +103,23 @@ bool init_game(GameState*  gameState, InputState *input)
     Vec2 ballSize = get_texture(ASSET_SPRITE_BALL).subSize;
     Vec2 spriteOffsetBall = ballSize / 2.0f * -1.0f;
 
-    Entity *e = create_entity(gameState, {10.0f + paddleSize.x/2.0f, input->screenSize.y/2.0f}, spriteOffsetPaddle, {spriteOffsetPaddle, paddleSize});
+    Entity *e = create_entity(gameState, {10.0f + paddleSize.x/2.0f, input->screenSize.y/2.0f}, spriteOffsetPaddle, {spriteOffsetPaddle, paddleSize}, ASSET_SPRITE_PADDLE);
     add_component(e, COMPONENT_LEFT_PADDLE);
-    e->materialIdx = get_material(gameState, ASSET_SPRITE_PADDLE);
 
-    e = create_entity(gameState, {input->screenSize.x - 10.0f - paddleSize.x/2.0f, input->screenSize.y/2.0f}, spriteOffsetPaddle, {spriteOffsetPaddle, paddleSize});
+    e = create_entity(gameState, {input->screenSize.x - 10.0f - paddleSize.x/2.0f, input->screenSize.y/2.0f}, spriteOffsetPaddle, {spriteOffsetPaddle, paddleSize}, ASSET_SPRITE_PADDLE);
     add_component(e, COMPONENT_RIGHT_PADDLE);
-    e->materialIdx = get_material(gameState, ASSET_SPRITE_PADDLE);
+   
 
-    e = create_entity(gameState, {input->screenSize/2.0f}, spriteOffsetBall, {spriteOffsetBall, ballSize});
+    e = create_entity(gameState, {input->screenSize/2.0f}, spriteOffsetBall, {spriteOffsetBall, ballSize}, ASSET_SPRITE_BALL);
     add_component(e, COMPONENT_BALL);
-    e->materialIdx = get_material(gameState, ASSET_SPRITE_BALL);
+   
     e->vel = {500.0f, 250.0f};
    
 
     return true;
 }
-void update_game(GameState* gameState, UIState *ui, InputState *input, float dt) 
+
+internal void update_level(GameState* gameState, InputState* input, UIState* ui, float dt)
 {
     float speed = 500.0f;
 
@@ -180,11 +133,11 @@ void update_game(GameState* gameState, UIState *ui, InputState *input, float dt)
         if(has_component(e, COMPONENT_LEFT_PADDLE))
         {
             e->vel = {};
-            if (key_is_down(input, W_KEY))
+            if (key_is_down(input, KEY_W))
             {
                 e->vel.y = -speed;
             }
-            if (key_is_down(input, S_KEY))
+            if (key_is_down(input, KEY_S))
             {
                 e->vel.y = speed;
             }
@@ -340,5 +293,32 @@ void update_game(GameState* gameState, UIState *ui, InputState *input, float dt)
         }
     }
 
+}
+
+void update_game(GameState* gameState, UIState *ui, InputState *input, float dt) 
+{
+    switch(gameState->GameState)
+    {
+        case GAME_STATE_MAIN_MENU:
+            do_button(ui, input, ASSET_SPRITE_PONG_FROM_SCRATCH_LOGO, 1, {0.0f, 0.0f, input->screenSize});
+            ui->globalLayer++;
+
+            if(do_button(ui, input, ASSET_SPRITE_BUTTON_64_16, 2, {400.0f, 400.0f, 196.0f, 48.0f}, "Play"))
+            {
+                gameState->GameState = GAME_STATE_RUNNING_LEVEL;
+            }
+
+            if(do_button(ui, input, ASSET_SPRITE_BUTTON_64_16, 3, {400.0f, 470.0f, 196.0f, 48.0f}, "Quit"))
+            {
+                platform_exit_application();
+            }
+            
+            ui->globalLayer--;
+            break;
+        case GAME_STATE_RUNNING_LEVEL:
+        update_level(gameState, input,ui,dt);
+        break;
+    }
+    
 };
 

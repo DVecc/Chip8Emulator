@@ -7,15 +7,17 @@
 #include "dds_structs.h"
 #include "logger.h"
 #include "platform.h"
-
+#include "shared_render_types.h"
 #include "vk_types.h"
 #include "vk_init.cpp"
 #include "vk_util.cpp"
 #include "vk_shader_util.cpp"
+#include "my_math.h"
 uint32_t constexpr MAX_IMAGES = 100;
 uint32_t constexpr MAX_DESCRIPTORS = 100;
 uint32_t constexpr MAX_RENDER_COMMANDS = 100;
 uint32_t constexpr MAX_TRANSFORMS = MAX_ENTITIES;
+uint32_t constexpr MAX_MATERIALS = 100;
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL vk_debug_callback(
     VkDebugUtilsMessageSeverityFlagBitsEXT msgSeverity,
@@ -41,6 +43,7 @@ struct VkContext
     VkCommandPool commandPool;
     VkSemaphore submitSemaphore;
     VkSemaphore acquireSemaphore;
+    VkFence imgAvailableFence;
     VkRenderPass renderPass;
     VkPipeline pipeline;
     VkPipelineLayout layout;
@@ -72,7 +75,39 @@ struct VkContext
 
     uint32_t scImgCount;
     int graphicsIdx;
+
+    uint32_t materialCount;
+    MaterialData materials[MAX_MATERIALS];
 };
+
+internal uint32_t get_or_create_material_idx(VkContext* vkcontext, Vec4 color = {1.0f, 1.0f, 1.0f, 1.0f})
+{
+    uint32_t materialIdx = INVALID_IDX;
+
+    for (uint32_t i = 0; i < vkcontext->materialCount; i++)
+    {
+        if(vkcontext->materials[i].color == color)
+        {
+            materialIdx = i;
+            break;
+        }
+    }
+
+    if(materialIdx == INVALID_IDX)
+    {
+        if(vkcontext->materialCount < MAX_MATERIALS)
+        {
+             materialIdx = vkcontext->materialCount;
+            vkcontext->materials[vkcontext->materialCount++].color = color;
+        }
+        else
+        {
+            ASSERT(0, "Reached maximum amount of Materials!");
+        }
+    }
+
+    return materialIdx;
+}
 
 internal Image *vk_create_image(VkContext *vkcontext, AssetTypeID assetTypeID)
 {
@@ -313,33 +348,50 @@ internal RenderCommand *vk_add_render_command(VkContext *vkcontext, Descriptor *
 }
 
 internal void vk_add_transform(VkContext* vkcontext,
-                                uint32_t materialIdx,
                                 AssetTypeID assetTypeId,
+                                Vec4 color,
                                 Vec2 pos,
-                                uint32_t animationIdx = 0)
+                                uint32_t animationIdx = 0,
+                                Vec2 size = {})
 {
-    Texture texture = get_texture(assetTypeId);
+    if (vkcontext->transformCount < MAX_TRANSFORMS)
+    {
+        Texture texture = get_texture(assetTypeId);
+        uint32_t materialIdx = get_or_create_material_idx(vkcontext, color);
 
-    uint32_t cols = texture.size.x / texture.subSize.x;
-    uint32_t rows = texture.size.y / texture.subSize.y;
+        uint32_t subSizeX = texture.subSize.x;
+        uint32_t subSizeY = texture.subSize.y;
+        uint32_t cols = texture.size.x / (float)subSizeX;
+        uint32_t rows = texture.size.y / (float)subSizeY;
+        float uvWidth = 1.0f / (float)cols;
+        float uvHeight = 1.0f / (float)rows;
 
-    float uvWidth = 1.0f / (float)cols;
-    float uvHeight = 1.0f / (float)rows;
-
-            Transform t = {};
-            t.materialIdx = materialIdx;
-            t.xPos = pos.x;
-            t.yPos = pos.y;
-            t.sizeX = texture.subSize.x;
-            t.sizeY = texture.subSize.y;
-            t.topV = float(animationIdx / cols) * uvHeight;
-            t.bottomV = t.topV + uvHeight;
-            t.leftU = float(animationIdx % cols) * uvWidth;
-            t.rightU = t.leftU + uvWidth;
-            vkcontext->transforms[vkcontext->transformCount++] = t;
+        if(size.x && size.y)
+        {
+            subSizeX = size.x;
+            subSizeY = size.y;
+        }
+    
+                Transform t = {};
+                t.materialIdx = materialIdx;
+                t.xPos = pos.x;
+                t.yPos = pos.y;
+                t.sizeX = subSizeX;
+                t.sizeY = subSizeY;
+                t.topV = float(animationIdx / cols) * uvHeight;
+                t.bottomV = t.topV + uvHeight;
+                t.leftU = float(animationIdx % cols) * uvWidth;
+                t.rightU = t.leftU + uvWidth;
+                vkcontext->transforms[vkcontext->transformCount++] = t;
+    }
+    else
+    {
+        ASSERT(0, "Reached Maximum amount of transforms");
+    }
 }
+   
 
-internal void vk_render_text(VkContext *vkcontext, RenderCommand * rc, uint32_t materialIdx, char * text, Vec2 origin)
+internal void vk_render_text(VkContext *vkcontext, RenderCommand * rc, char * text, Vec2 origin, Vec4 color = {1.0f, 1.0f, 1.0f, 1.0f})
 {
     float originX = origin.x;
     while(char c = *(text++))
@@ -360,7 +412,7 @@ internal void vk_render_text(VkContext *vkcontext, RenderCommand * rc, uint32_t 
                                 continue;
                             }
         
-                            vk_add_transform(vkcontext, materialIdx, ASSET_SPRITE_FONT_ATLAS, origin, c);
+                            vk_add_transform(vkcontext, ASSET_SPRITE_FONT_ATLAS, color, origin, c);
                             rc->instanceCount++;
                             origin.x+=15.0f;
                         }
@@ -757,8 +809,8 @@ bool vk_init(VkContext *vkcontext, void *window)
         VK_CHECK(vkCreateSemaphore(vkcontext->device, &semaInfo, 0, &vkcontext->acquireSemaphore));
         VK_CHECK(vkCreateSemaphore(vkcontext->device, &semaInfo, 0, &vkcontext->submitSemaphore));
 
-        // VkFenceCreateInfo fenceInfo = fence_info(VK_FENCE_CREATE_SIGNALED_BIT);
-        // VK_CHECK(vkCreateFence(vkcontext->device, &fenceInfo, 0, &vkcontext->imgAvailableFence));
+         VkFenceCreateInfo fenceInfo = fence_info(VK_FENCE_CREATE_SIGNALED_BIT);
+         VK_CHECK(vkCreateFence(vkcontext->device, &fenceInfo, 0, &vkcontext->imgAvailableFence));
     }
 
     // Create Sampler
@@ -848,15 +900,18 @@ bool vk_init(VkContext *vkcontext, void *window)
 bool vk_render(VkContext *vkcontext, GameState *gameState, UIState *ui)
 {
     uint32_t imgIdx;
+    // We wait on the GPU to be done with the work
+    VK_CHECK(vkWaitForFences(vkcontext->device, 1, &vkcontext->imgAvailableFence, VK_TRUE, UINT64_MAX));
+    VK_CHECK(vkResetFences(vkcontext->device, 1, &vkcontext->imgAvailableFence));
 
     // Copy Transforms to the buffer
     {
         for (uint32_t i = 0; i < gameState->entityCount; i++)
         {
             Entity *e = &gameState->entities[i];
-            Material *m = get_material(gameState, e->materialIdx);
+           
 
-            Descriptor *desc = vk_get_descriptor(vkcontext, m->assetTypeID);
+            Descriptor *desc = vk_get_descriptor(vkcontext, e->assetTypeID);
             if (desc)
             {
                 RenderCommand *rc = vk_add_render_command(vkcontext, desc);
@@ -866,12 +921,32 @@ bool vk_render(VkContext *vkcontext, GameState *gameState, UIState *ui)
                 }
             }
 
-            vk_add_transform(vkcontext, e->materialIdx, m->assetTypeID, e->origin+e->spriteOffset);
+            vk_add_transform(vkcontext, e->assetTypeID, e->color, e->origin+e->spriteOffset);
         }
     }
 
     // UI Rendering
     {
+
+        for(uint32_t uiEleIdx = 0; uiEleIdx < ui->uiElementCount;
+        uiEleIdx++)
+        {
+            UIElement e = ui->uiElements[uiEleIdx];
+
+            Descriptor *desc = vk_get_descriptor(vkcontext, e.assetTypeID);
+            if(desc)
+            {
+                RenderCommand *rc = vk_add_render_command(vkcontext, desc);
+
+                if(rc)
+                {
+                    rc->instanceCount = 1;
+                }
+            }
+
+            vk_add_transform(vkcontext, e.assetTypeID, {1.0f, 1.0f, 1.0f, 1.0f}, e.rect.pos, e.animationIdx, e.rect.size);
+
+        }
         if(ui->labelCount)
         {
             Descriptor *desc = vk_get_descriptor(vkcontext, ASSET_SPRITE_FONT_ATLAS);
@@ -884,11 +959,11 @@ bool vk_render(VkContext *vkcontext, GameState *gameState, UIState *ui)
                     for(uint32_t labelIdx = 0; labelIdx < ui->labelCount; labelIdx++)
                     {
                         Label l = ui->labels[labelIdx];
-                        uint32_t materialIdx = get_material(gameState, ASSET_SPRITE_FONT_ATLAS);
+                        
                         
                         float originX = l.pos.x;
         
-                        vk_render_text(vkcontext, rc, materialIdx, l.text, l.pos);
+                        vk_render_text(vkcontext, rc, l.text, l.pos);
         
                     }
                 }
@@ -902,15 +977,12 @@ bool vk_render(VkContext *vkcontext, GameState *gameState, UIState *ui)
 
     // Copy Data to Buffers
     {
-        vk_copy_to_buffer(&vkcontext->transformStorageBuffer, &vkcontext->transforms, sizeof(Transform) * vkcontext->transformCount);
+        vk_copy_to_buffer(&vkcontext->transformStorageBuffer, vkcontext->transforms, sizeof(Transform) * vkcontext->transformCount);
         vkcontext->transformCount = 0;
 
-        MaterialData materialData[MAX_MATERIALS];
-        for (uint32_t i = 0; i < gameState->materialCount; i++)
-        {
-            materialData[i] = gameState->materials[i].materialData;
-        }
-        vk_copy_to_buffer(&vkcontext->materialStorageBuffer, materialData, sizeof(MaterialData) * gameState->materialCount);
+        
+        vk_copy_to_buffer(&vkcontext->materialStorageBuffer, vkcontext->materials, sizeof(MaterialData) * vkcontext->materialCount);
+        vkcontext->materialCount = 0;
     }
 
     VK_CHECK(vkAcquireNextImageKHR(vkcontext->device, vkcontext->swapchain, 0, vkcontext->acquireSemaphore, 0, &imgIdx));
@@ -977,7 +1049,7 @@ bool vk_render(VkContext *vkcontext, GameState *gameState, UIState *ui)
     submitInfo.pWaitSemaphores = &vkcontext->acquireSemaphore;
     submitInfo.pWaitDstStageMask = &waitStage;
 
-    VK_CHECK(vkQueueSubmit(vkcontext->graphicsQueue, 1, &submitInfo, 0));
+    VK_CHECK(vkQueueSubmit(vkcontext->graphicsQueue, 1, &submitInfo, vkcontext->imgAvailableFence));
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -988,9 +1060,6 @@ bool vk_render(VkContext *vkcontext, GameState *gameState, UIState *ui)
     presentInfo.waitSemaphoreCount = 1;
 
     VK_CHECK(vkQueuePresentKHR(vkcontext->graphicsQueue, &presentInfo));
-
-    VK_CHECK(vkDeviceWaitIdle(vkcontext->device));
-
-    vkFreeCommandBuffers(vkcontext->device, vkcontext->commandPool, 1, &cmd);
+    
     return true;
 }
