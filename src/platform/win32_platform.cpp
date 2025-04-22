@@ -150,7 +150,7 @@ int main()
         return -1;
     }
 
-    if(!init_game(&gameState))
+    if(!init_game(&gameState,&input))
     {
         LOG_FATAL("Failed to initialize Game");
         return -1;

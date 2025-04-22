@@ -1,4 +1,5 @@
 #pragma once
+#include "../src/renderer/my_math.h"
 
 enum AssetTypeID
 {
@@ -12,3 +13,5 @@ enum AssetTypeID
 };
 
 const char* get_asset(AssetTypeID AssetTypeID);
+
+Vec2 get_texture_size(AssetTypeID AssetTypeID);

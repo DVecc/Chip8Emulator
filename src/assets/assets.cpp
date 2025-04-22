@@ -1,6 +1,7 @@
 #include "assets.h"
 #include "logger.h"
 #include "platform.h"
+#include "../src/renderer/my_math.h"
 
 const char* get_asset(AssetTypeID assetTypeID)
 {
@@ -51,4 +52,41 @@ const char* get_asset(AssetTypeID assetTypeID)
         }
 
         return 0;
+}
+
+Vec2 get_texture_size(AssetTypeID AssetTypeID)
+{
+    Vec2 size = {};
+    switch (AssetTypeID)
+    {
+        case ASSET_SPRITE_WHITE:
+        {
+            size = {1.0f, 1.0f};
+        }
+        break;
+
+        case ASSET_SPRITE_BALL:
+        {
+           size = {50.0f, 50.0f};    
+        }
+        break;
+
+        case ASSET_SPRITE_PADDLE:
+        {
+           size = {50.0f, 100.0f};
+        }break;
+
+        case ASSET_SPRITE_ISABELLE:
+        {
+            size = {50.0f, 50.0f};
+        }
+        break;
+        default:
+        {
+            ASSERT(0, "Unrecognized AssetTypeID: %d", AssetTypeID);
+            
+        }
+    }
+
+    return size;
 }
