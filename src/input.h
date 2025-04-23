@@ -8,6 +8,7 @@ enum KeyID
     KEY_LEFT_MOUSE,
     KEY_MIDDLE_MOUSE,
     KEY_RIGHT_MOUSE,
+    KEY_ESC,
 
     KEY_A,
     KEY_D,

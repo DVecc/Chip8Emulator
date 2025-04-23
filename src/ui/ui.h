@@ -25,6 +25,7 @@ struct UIElement
 
 struct Label 
 {
+    int number = INT32_MAX;
     char* text;
     Vec2 pos;
 };
@@ -43,4 +44,5 @@ struct UIState
 
 void update_ui(UIState *ui);
 void do_text(UIState *ui, Vec2 pos, char* text);
+void do_number(UIState *ui, Vec2 pos, int number);
 bool do_button(UIState* ui, InputState* input, AssetTypeID assetTypeID, uint32_t ID, Rect rect, char* text = 0);

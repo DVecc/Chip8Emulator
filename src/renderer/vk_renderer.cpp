@@ -960,10 +960,20 @@ bool vk_render(VkContext *vkcontext, GameState *gameState, UIState *ui)
                     {
                         Label l = ui->labels[labelIdx];
                         
-                        
-                        float originX = l.pos.x;
+                        if(l.number != INT32_MAX)
+                        {
+                            char buffer[16] = {};
+
+                            sprintf(buffer, "%d", l.number);
+                            vk_render_text(vkcontext, rc, buffer, l.pos);
+                        }
+
+                        if(l.text)
+                        {
+                            vk_render_text(vkcontext, rc, l.text, l.pos);
+                        }
         
-                        vk_render_text(vkcontext, rc, l.text, l.pos);
+                        
         
                     }
                 }
@@ -1038,7 +1048,7 @@ bool vk_render(VkContext *vkcontext, GameState *gameState, UIState *ui)
 
     vkCmdEndRenderPass(cmd);
 
-    VK_CHECK(vkEndCommandBuffer(cmd));
+   VK_CHECK(vkEndCommandBuffer(cmd));
 
     VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
@@ -1060,6 +1070,8 @@ bool vk_render(VkContext *vkcontext, GameState *gameState, UIState *ui)
     presentInfo.waitSemaphoreCount = 1;
 
     VK_CHECK(vkQueuePresentKHR(vkcontext->graphicsQueue, &presentInfo));
+    VK_CHECK(vkDeviceWaitIdle(vkcontext->device));
+    vkFreeCommandBuffers(vkcontext->device, vkcontext->commandPool, 1, &cmd);
     
     return true;
 }

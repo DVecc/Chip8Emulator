@@ -6,7 +6,9 @@
 #include "ui/ui.h"
 
 uint32_t constexpr MAX_ENTITIES = 100;
-
+float constexpr SPEEDUP = 15.0f;
+float constexpr INITIAL_X_VEL = 400;
+float constexpr INITIAL_Y_VEL = 500;
 
 enum Components
 {
@@ -29,13 +31,17 @@ struct Entity {
 enum GameStateID
 {
     GAME_STATE_MAIN_MENU,
-    GAME_STATE_RUNNING_LEVEL
+    GAME_STATE_RUNNING_LEVEL,
+    GAME_STATE_SCORE_SCREEN
 };
 
 struct GameState {
     GameStateID GameState;
     uint32_t entityCount;
     Entity entities[MAX_ENTITIES];
+    float paddleSpeed = 500;
+    int scores[2] = {0,0};
+    float gameTime;
 
    
 };
@@ -113,7 +119,8 @@ bool init_game(GameState*  gameState, InputState *input)
     e = create_entity(gameState, {input->screenSize/2.0f}, spriteOffsetBall, {spriteOffsetBall, ballSize}, ASSET_SPRITE_BALL);
     add_component(e, COMPONENT_BALL);
    
-    e->vel = {500.0f, 250.0f};
+    e->vel = {INITIAL_X_VEL, INITIAL_X_VEL/2.0f};
+    gameState->paddleSpeed = INITIAL_Y_VEL;
    
 
     return true;
@@ -121,9 +128,43 @@ bool init_game(GameState*  gameState, InputState *input)
 
 internal void update_level(GameState* gameState, InputState* input, UIState* ui, float dt)
 {
-    float speed = 500.0f;
+    float speed =gameState->paddleSpeed;
+    gameState->paddleSpeed += SPEEDUP * dt;
+    gameState->gameTime += dt;
 
-    do_text(ui, {100.0f, 100.0f}, "Pong from Scratch!");
+    // Input
+    {
+        if(key_pressed_this_frame(input, KEY_ESC))
+        {
+            gameState->gameTime = 0;
+            gameState->scores[0] = 0;
+            gameState->scores[1] = 0;
+            gameState->entityCount = 0;
+            gameState->GameState = GAME_STATE_MAIN_MENU;
+            init_game(gameState, input);
+
+        }
+    }
+
+    if(gameState->scores[0] >= 10 || gameState->scores[1] >= 10)
+    {
+        gameState->GameState = GAME_STATE_SCORE_SCREEN;
+    }
+
+    // Time
+    {
+        do_text(ui, {10.0f, 10.0f}, "Time: ");
+        do_number(ui, {120.0f, 10.0f}, (int)gameState->gameTime);
+    }
+    
+
+    // Score
+    {
+        do_text(ui, {200.0f, 10.0f}, "Score: ");
+        do_number(ui, {295.0f, 10.0f}, (int)gameState->scores[0]);
+        do_text(ui, {315.0f, 10.0f}, ":");
+        do_number(ui, {330.0f, 10.0f}, (int)gameState->scores[1]);
+    }
 
     for (uint32_t i = 0; i < gameState->entityCount; i++)
     {
@@ -160,12 +201,11 @@ internal void update_level(GameState* gameState, InputState* input, UIState* ui,
 
             if(e->origin.y > ball->origin.y)
             {
-                e->vel.y = -speed;
+                e->vel.y = -speed * 0.9f;
 
                 float yHeading = e->origin.y + e->vel.y * dt;
-                float distanceYToBall = ball->origin.y - e->origin.y;
-
-                if(yHeading < distanceYToBall)
+                
+                if(yHeading < ball->origin.y)
                 {
                     e->origin.y = ball->origin.y;
                 }
@@ -177,12 +217,11 @@ internal void update_level(GameState* gameState, InputState* input, UIState* ui,
 
             if(e->origin.y < ball->origin.y)
             {
-                e->vel.x = speed;
+                e->vel.y = speed * 0.9f;
 
                 float yHeading = e->origin.y + e->vel.y * dt;
-                float distanceYToBall = ball->origin.y - e->origin.y;
-
-                if(yHeading > distanceYToBall)
+                
+                if(yHeading > ball->origin.y)
                 {
                     e->origin.y = ball->origin.y;
                 }
@@ -191,20 +230,28 @@ internal void update_level(GameState* gameState, InputState* input, UIState* ui,
                     e->origin.y = yHeading;
                 }
             }
+
+            e->origin.y = clamp(e->origin.y, 
+                e->boundingBox.size.y / 2.0f, 
+                input->screenSize.y - e->boundingBox.size.y / 2.0f);
         }
 
         if(has_component(e, COMPONENT_BALL))
         {
+            // Right Side
             if(e->origin.x + e->boundingBox.offset.x + e->boundingBox.size.x > input->screenSize.x)
             {
                 e->vel.x = -e->vel.x;
                 e->origin.x -= 2* (e->origin.x + e->boundingBox.offset.x + e->boundingBox.size.x - input->screenSize.x);
+                gameState->scores[0]++;
             }
 
+            // Left Side
             if(e->origin.x + e->boundingBox.offset.x < 0.0f)
             {
                 e->vel.x = -e->vel.x;
                 e->origin.x -= 2*(e->origin.x + e->boundingBox.offset.x);
+                gameState->scores[1]++;
             }
 
             if(e->origin.y + e->boundingBox.offset.y + e->boundingBox.size.y > input->screenSize.y)
@@ -316,7 +363,36 @@ void update_game(GameState* gameState, UIState *ui, InputState *input, float dt)
             ui->globalLayer--;
             break;
         case GAME_STATE_RUNNING_LEVEL:
-        update_level(gameState, input,ui,dt);
+        update_level(gameState, input,ui, dt);
+        break;
+
+        case GAME_STATE_SCORE_SCREEN:
+        do_button(ui, input, ASSET_SPRITE_PONG_FROM_SCRATCH_LOGO, 4, {0.0f, 0.0f, input->screenSize});
+        ui->globalLayer++;
+        do_text(ui, {400, input->screenSize.y / 2.0f}, gameState->scores[0] == 10 ? "You Win!":"You Lose :(");
+
+        if(do_button(ui, input, ASSET_SPRITE_BUTTON_64_16, 5, {400, input->screenSize.y / 2.0f + 70, 196.0f, 48.0f }, "Restart"))
+        {
+            gameState->gameTime = 0;
+            gameState->scores[0] = 0;
+            gameState->scores[1] = 0;
+            gameState->entityCount = 0;
+            gameState->GameState = GAME_STATE_RUNNING_LEVEL;
+            init_game(gameState, input);
+        }
+
+        if(do_button(ui, input, ASSET_SPRITE_BUTTON_64_16, 6, {400, input->screenSize.y / 2.0f + 140, 196.0f, 48.0f}, "Main Menu"))
+        {
+            gameState->gameTime = 0;
+            gameState->scores[0] = 0;
+            gameState->scores[1] = 0;
+            gameState->entityCount = 0;
+            
+            gameState->GameState = GAME_STATE_MAIN_MENU;
+            init_game(gameState, input);
+            
+        }
+        ui->globalLayer--;
         break;
     }
     
