@@ -16,6 +16,7 @@ enum TextColor
     TEXT_COLOR_YELLOW,
     TEXT_COLOR_RED,
     TEXT_COLOR_LIGHT_RED,
+    TEXT_COLOR_BLUE
 };
 
 template <typename... Args>
@@ -39,13 +40,13 @@ void _log(wchar_t* prefix, TextColor color, const wchar_t* msg, Args... args)
 #define LOG_WARN(msg, ...) _log(L"WARN", TEXT_COLOR_YELLOW, msg, __VA_ARGS__)
 #define LOG_ERROR(msg, ...) _log(L"ERROR", TEXT_COLOR_RED, msg, __VA_ARGS__)
 #define LOG_FATAL(msg, ...) _log(L"FATAL", TEXT_COLOR_LIGHT_RED, msg, __VA_ARGS__)
+#define LOG_VK(msg, ...) _log(L"VULKAN VALIDATION", TEXT_COLOR_BLUE, msg, __VA_ARGS__)
 
 #define ASSERT(x, msg, ...)              \
     {                                    \
         if (!(x))                        \
         {                                \
             LOG_ERROR(msg, __VA_ARGS__); \
-            __debugbreak();              \
         }                                \
     }
 

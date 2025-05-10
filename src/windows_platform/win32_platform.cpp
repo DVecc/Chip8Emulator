@@ -80,15 +80,19 @@ LRESULT CALLBACK platform_window_callback(HWND window, UINT msg, WPARAM wParam, 
         case WM_CLOSE:
             platform_cleanup();
             break;
+
+        case WM_SIZE:
+            framebufferResized = true;
+            break;
    
     }
 
     return DefWindowProc(window, msg, wParam, lParam);
 };
 
-bool platform_create_window(HWND window, int windowWidth, int windowHeight)
+bool platform_create_window(HWND* window, int windowWidth, int windowHeight)
 {
-    HINSTANCE instance = GetModuleHandle(0);
+    HINSTANCE instance = GetModuleHandle(nullptr);
 
     WNDCLASS wc = {};
     wc.lpfnWndProc = platform_window_callback;
@@ -98,7 +102,7 @@ bool platform_create_window(HWND window, int windowWidth, int windowHeight)
 
     if (!RegisterClass(&wc))
     {
-        MessageBoxEx(0, L"Failed to register window class", (LPCWSTR)"Error", MB_ICONEXCLAMATION | MB_OK, 0);
+        MessageBoxEx(0, L"Failed to register window class", L"Error", MB_ICONEXCLAMATION | MB_OK, 0);
         return false;
     }
 
@@ -112,7 +116,7 @@ bool platform_create_window(HWND window, int windowWidth, int windowHeight)
         windowHeight += borderRect.bottom - borderRect.top;
     }
 
-    window = CreateWindowEx(
+    *window = CreateWindowEx(
         WS_EX_APPWINDOW,
         L"vulkan_engine_class",
         L"Chip8Emulator",
@@ -124,7 +128,7 @@ bool platform_create_window(HWND window, int windowWidth, int windowHeight)
         return false;
     }
 
-    ShowWindow(window, SW_SHOW);
+    ShowWindow(*window, SW_SHOW);
     return true;
 };
 
@@ -167,6 +171,10 @@ void platform_log(const wchar_t* msg, TextColor color)
     case TEXT_COLOR_LIGHT_RED:
         colorBits = FOREGROUND_INTENSITY | FOREGROUND_RED;
         break;
+
+    case TEXT_COLOR_BLUE:
+        colorBits = FOREGROUND_BLUE;
+        break;
     }
 
     SetConsoleTextAttribute(consoleHandle, colorBits);
@@ -183,3 +191,12 @@ void platform_cleanup()
 {
  running = false;
 };
+
+void platform_get_window_size(HWND window, uint32_t *width, uint32_t *height)
+{
+    RECT rect;
+    GetClientRect(window, &rect);
+
+    *width = rect.right - rect.left;
+    *height = rect.bottom - rect.top;
+}
