@@ -9,74 +9,71 @@
 //Utilities
 #include "../utils/logger.h"
 
+
+
+static Input* input = nullptr;
+
+void platform_setInput(Input* inputPointer)
+{
+    input = inputPointer;
+}
+
+int MapVKToChip8Key(int vk) {
+    switch (vk) {
+        case '1': return 0x1;
+        case '2': return 0x2;
+        case '3': return 0x3;
+        case '4': return 0xC;
+        case 'Q': return 0x4;
+        case 'W': return 0x5;
+        case 'E': return 0x6;
+        case 'R': return 0xD;
+        case 'A': return 0x7;
+        case 'S': return 0x8;
+        case 'D': return 0x9;
+        case 'F': return 0xE;
+        case 'Z': return 0xA;
+        case 'X': return 0x0;
+        case 'C': return 0xB;
+        case 'V': return 0xF;
+        default: return -1;
+    }
+}
+
 LRESULT CALLBACK platform_window_callback(HWND window, UINT msg, WPARAM wParam, LPARAM lParam)
 {
     switch (msg)
     {
-        /*
+        
         case WM_KEYDOWN:
+        {
+
+        
+            int vk = (int)wParam;
+
+            // Map VK to CHIP-8 key (you'll need to define this function)
+            int chip8Key = MapVKToChip8Key(vk);
+            LOG_TRACE(L"VK: %d down", chip8Key);
+            if (chip8Key != -1 && input)
+                input->onKeyDown((uint8_t)chip8Key);
+
+            break;
+        }
         case WM_KEYUP:
         {
-            bool isDown = msg == WM_KEYDOWN ? true : false;
-            uint32_t keyID = INVALID_IDX;
+            int vk = (int)wParam;
+            int chip8Key = MapVKToChip8Key(vk);
 
-            switch((int)wParam)
+            if (chip8Key != -1 && input)
+                input->onKeyUp((uint8_t)chip8Key);
+
+            else if (vk == VK_ESCAPE)
             {
-                case 'A':
-                    keyID = KEY_A;
-                    break;
-                case 'S':
-                    keyID = KEY_S;
-                    break;
-                case 'D':
-                    keyID = KEY_D;
-                    break;
-                case 'W':
-                    keyID = KEY_W;
-                    break;
-                case VK_ESCAPE:
-                    keyID = KEY_ESC;
-                break;
-            }
-
-            if(keyID < KEY_COUNT)
-            {
-                //if(input.keys[keyID].isDown != isDown)
-                {
-                    input.keys[keyID].isDown = isDown;
-                    input.keys[keyID].halfTransitionCount++;
-                }
-
+                running = false;
             }
             break;
         }
-        case WM_MOUSEMOVE:
-        {
-            input.prevMousePos = input.mousePos;
-            input.mousePos = {(float)GET_X_LPARAM(lParam),
-                              (float)GET_Y_LPARAM(lParam)};
-        }
-        break;
-        case WM_LBUTTONDOWN:
-        case WM_MBUTTONDOWN:
-        case WM_RBUTTONDOWN:
-        case WM_LBUTTONUP:
-        case WM_MBUTTONUP:
-        case WM_RBUTTONUP:
-        {
-            bool isDown = msg == WM_LBUTTONDOWN || msg == WM_MBUTTONDOWN || msg == WM_RBUTTONDOWN ? true : false;
-            KeyID keyID = (msg==WM_LBUTTONDOWN || msg == WM_LBUTTONUP) ? KEY_LEFT_MOUSE :
-                          (msg==WM_MBUTTONDOWN || msg == WM_MBUTTONUP) ? KEY_MIDDLE_MOUSE :
-                           KEY_RIGHT_MOUSE;
-
-                           input.keys[keyID].halfTransitionCount++;
-                           input.keys[keyID].isDown = isDown;
-
-                           input.mouseClickPos = {(float)GET_X_LPARAM(lParam),
-                                             (float)GET_Y_LPARAM(lParam)};
-        }
-
-        break; */
+        
         case WM_CLOSE:
             platform_cleanup();
             break;

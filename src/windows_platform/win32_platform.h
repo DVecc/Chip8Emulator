@@ -7,6 +7,8 @@
 // Windows Libraries
 #include <windows.h>
 
+#include "../input/input.h"
+
 // Forward decleration
 
 enum TextColor;
@@ -19,5 +21,6 @@ void platform_log(const wchar_t *msg, TextColor color);
 void platform_update_window(HWND window);
 void platform_cleanup();
 void platform_get_window_size(HWND window, uint32_t* width, uint32_t* height);
+void platform_setInput(Input* inputPointer);
 
 #endif

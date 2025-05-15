@@ -146,11 +146,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\emulator\chip8Emulator.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\renderer\vk_renderer.cpp" />
     <ClCompile Include="src\windows_platform\win32_platform.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\emulator\chip8Emulator.h" />
+    <ClInclude Include="src\input\input.h" />
     <ClInclude Include="src\renderer\vk_renderer.h" />
     <ClInclude Include="src\utils\logger.h" />
     <ClInclude Include="src\windows_platform\win32_platform.h" />

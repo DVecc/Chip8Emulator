@@ -8,6 +8,9 @@
 // Vulkan Libraries
 #include "renderer/vk_renderer.h"
 
+// CHIP8 System
+#include "emulator/chip8Emulator.h"
+
 // Platform libraries
 #ifdef WINDOWS_BUILD
 #include "windows_platform/win32_platform.h"
@@ -17,6 +20,7 @@
 
 // Utilities
 #include "utils/logger.h"
+#include <chrono>
 
 // CONSTANTS
 const uint32_t WIDTH = 800;
@@ -26,43 +30,7 @@ const uint32_t HEIGHT = 600;
 bool running = false;
 bool framebufferResized = false;
 
-class Chip8Emulator
-{
-    public:
-    #ifdef WINDOWS_BUILD
-        HWND window;
-    #endif
 
-private:
-    uint8_t gfx[64 * 32];
-
-public:
-    Chip8Emulator()
-    {
-        for (int i = 0; i < sizeof(gfx); i++)
-        {
-            gfx[i] = i % 2;
-        }
-    }
-
-    void run(VK_Renderer renderer) 
-    {
-        while (running)
-        {
-            platform_update_window(window);
-            if (running)
-            {
-                renderer.drawFrame(window, &framebufferResized, gfx);
-            }
-            
-        }
-        vkDeviceWaitIdle(renderer.device);
-        // Cleanup 
-        renderer.cleanup();
-    }
-
-    
-};
 
 
 static void vk_compile_shader(char *shaderPath, char *sprivPath)
@@ -96,7 +64,36 @@ int main()
             LOG_FATAL(L"Failed to create window");
         }
         renderer.initVulkan(emulator.window);
-        emulator.run(renderer);
+        emulator.Chip8Init();
+        platform_setInput(&emulator);
+        emulator.LoadROM("src/Rush Hour [Hap, 2006].ch8");
+        auto lastCycleTime = std::chrono::high_resolution_clock::now();
+
+        while (running)
+        {
+            platform_update_window(emulator.window);
+
+            auto currentTime = std::chrono::high_resolution_clock::now();
+		    float dt = std::chrono::duration<float, std::chrono::milliseconds::period>(currentTime - lastCycleTime).count();
+
+            if (dt > 1000 / 60)
+            {
+                if (running)
+                {
+                    lastCycleTime = currentTime;
+                     for (int i = 0; i < 10; ++i)
+                      {
+                        emulator.cycle();
+                      }
+                    
+                    renderer.drawFrame(emulator.window, &framebufferResized, emulator.gfx);
+                }
+            }
+            
+        }
+        vkDeviceWaitIdle(renderer.device);
+        // Cleanup 
+        renderer.cleanup();
 
         
 
