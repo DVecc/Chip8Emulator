@@ -1,0 +1,3 @@
+# Third-party dependencies should not dominate the repository language summary.
+glm/** linguist-vendored
+src/utils/miniaudio.h linguist-vendored
