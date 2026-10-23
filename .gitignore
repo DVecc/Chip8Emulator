@@ -1,0 +1,12 @@
+# Application build products. Bundled tools under lib/ are preserved.
+/main.exe
+/main.ilk
+/main.pdb
+/win32_platform.obj
+/build/
+/out/
+*.obj
+*.pdb
+*.ilk
+.vs/
+*.user
