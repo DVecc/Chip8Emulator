@@ -1,0 +1,48 @@
+name: Windows build and tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    env:
+      VULKAN_SDK: C:\VulkanSDK\1.4.309.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache Vulkan SDK
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: C:\VulkanSDK\1.4.309.0
+          key: windows-2022-vulkan-1.4.309.0
+      - name: Install Vulkan SDK
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'vulkan-sdk.exe'
+          Invoke-WebRequest 'https://sdk.lunarg.com/sdk/download/1.4.309.0/windows/vulkansdk-windows-X64-1.4.309.0.exe' -OutFile $installer
+          $install = Start-Process -FilePath $installer -ArgumentList '--root', $env:VULKAN_SDK, '--accept-licenses', '--default-answer', '--confirm-command', 'install' -Wait -PassThru -WindowStyle Hidden
+          if ($install.ExitCode -ne 0) { throw "Vulkan SDK installer failed: $($install.ExitCode)" }
+          if (!(Test-Path "$env:VULKAN_SDK/Bin/glslc.exe")) { throw 'Shader compiler missing after SDK installation' }
+      - name: Configure
+        run: cmake -S . -B out -G "Visual Studio 17 2022" -A x64
+      - name: Build Release
+        run: cmake --build out --config Release --parallel 2
+      - name: Run core regression checks
+        run: ctest --test-dir out -C Release --output-on-failure
+      - name: Package without ROMs
+        run: ./scripts/package-release.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64-preview
+          path: |
+            releases/*.zip
+            releases/*.sha256
+          if-no-files-found: error

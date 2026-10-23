@@ -57,3 +57,9 @@ $env:VULKAN_SDK = 'C:\VulkanSDK\1.4.309.0'
 ```
 
 `PreferredToolArchitecture=x64` is now recorded in the project. This run emitted the existing nonfatal `LNK4075` warning because Release enables optimization alongside incremental linking. Both shader outputs were generated in `vs-out64/shaders/`.
+
+## Portfolio release follow-up
+
+The current source tree no longer tracks the legacy `build/chip8.exe`, generated SPIR-V files, third-party ROMs or unused CppWinRT package manifest. Their local copies were retained, and Git history was not rewritten. Generated shaders are built from GLSL source.
+
+The v0.1.0 Windows x64 preview uses the static Microsoft C++ runtime. Its package script includes only the executable, two shaders, instructions and dependency notices, plus a separate SHA-256 checksum. No ROMs or build intermediates are included. Windows CI repeats the Release build, core regression checks and package generation; a hosted runner does not verify Vulkan presentation or audible sound.

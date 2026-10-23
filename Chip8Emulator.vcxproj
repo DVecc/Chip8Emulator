@@ -160,10 +160,7 @@
     <ClInclude Include="src\utils\logger.h" />
     <ClInclude Include="src\windows_platform\win32_platform.h" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemDefinitionGroup>
+<ItemDefinitionGroup>
     <PostBuildEvent>
       <Command>if not exist "$(OutDir)shaders" mkdir "$(OutDir)shaders"
 "$(VULKAN_SDK)\Bin\glslc.exe" "$(ProjectDir)src\shaders\shader.vert" -o "$(OutDir)shaders\vert.spv"

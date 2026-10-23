@@ -368,3 +368,8 @@ FodyWeavers.xsd
 /docs/media/frames/
 *.ch8
 /vs-out*/
+*.spv
+/releases/
+/packages.config
+*.rom
+*.c8

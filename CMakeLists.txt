@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
-project(Chip8Emulator LANGUAGES CXX)
+project(Chip8Emulator VERSION 0.1.0 LANGUAGES CXX)
+# Keep the downloadable Windows build independent of the MSVC redistributable.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 if(NOT WIN32)
   message(FATAL_ERROR "This renderer requires Win32")
 endif()
