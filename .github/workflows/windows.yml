@@ -27,7 +27,9 @@ jobs:
         shell: pwsh
         run: |
           $installer = Join-Path $env:RUNNER_TEMP 'vulkan-sdk.exe'
-          Invoke-WebRequest 'https://sdk.lunarg.com/sdk/download/1.4.309.0/windows/vulkansdk-windows-X64-1.4.309.0.exe' -OutFile $installer
+          Invoke-WebRequest 'https://sdk.lunarg.com/sdk/download/1.4.309.0/windows/VulkanSDK-1.4.309.0-Installer.exe' -OutFile $installer
+          $expectedHash = '48b132169b64fe65cdb0f20970195335a65354e73f1ea5373032c2a8bbad4297'
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expectedHash) { throw 'Vulkan SDK checksum mismatch' }
           $install = Start-Process -FilePath $installer -ArgumentList '--root', $env:VULKAN_SDK, '--accept-licenses', '--default-answer', '--confirm-command', 'install' -Wait -PassThru -WindowStyle Hidden
           if ($install.ExitCode -ne 0) { throw "Vulkan SDK installer failed: $($install.ExitCode)" }
           if (!(Test-Path "$env:VULKAN_SDK/Bin/glslc.exe")) { throw 'Shader compiler missing after SDK installation' }
