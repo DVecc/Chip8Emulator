@@ -362,3 +362,7 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 /src/shaders/compile.bat
+
+
+# Generated local application output
+/build/
