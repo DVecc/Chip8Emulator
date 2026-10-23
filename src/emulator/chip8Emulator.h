@@ -14,6 +14,8 @@
 #include "../utils/logger.h"
 #include"../input/input.h"
 
+#include "../utils/miniaudio.h"
+
 class Chip8Emulator : public Input
 {
     public:
@@ -24,12 +26,21 @@ class Chip8Emulator : public Input
         void Chip8Init();
         void LoadROM(char const* filename);
 		void cycle();
+        void tickTimers();
 		void onKeyDown(uint8_t chip8Key) override;
 		void onKeyUp(uint8_t chip8Key) override;
+		void ShutdownSound();
 
     private:
         const static unsigned int START_ADDRESS = 0x200;
         const unsigned int FONTSET_START_ADDRESS = 0x50;
+
+		ma_engine audioEngine;
+		ma_sound beepSound;
+		ma_waveform waveform;
+		bool soundInitialized = false;
+		bool InitSound();
+
 
 		bool waitingForKey = false;
 		bool keyReleased = true;
@@ -50,10 +61,10 @@ class Chip8Emulator : public Input
 
         typedef void (Chip8Emulator::*Chip8Func)();
 	    Chip8Func table[0xF + 1];
-	    Chip8Func table0[0xE + 1];
-	    Chip8Func table8[0xE + 1];
-	    Chip8Func tableE[0xE + 1];
-	    Chip8Func tableF[0x65 + 1];
+	    Chip8Func table0[16];
+	    Chip8Func table8[16];
+	    Chip8Func tableE[16];
+	    Chip8Func tableF[256];
 
 		void Table0();
 		void Table8();

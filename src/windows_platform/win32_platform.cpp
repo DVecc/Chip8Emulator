@@ -11,6 +11,7 @@
 
 
 
+
 static Input* input = nullptr;
 
 void platform_setInput(Input* inputPointer)

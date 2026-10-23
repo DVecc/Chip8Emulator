@@ -29,6 +29,7 @@ void _log(wchar_t* prefix, TextColor color, const wchar_t* msg, Args... args)
     wsprintf(msgBuffer, fmtBuffer, args...);
 
     platform_log(msgBuffer, color);
+    std::wcerr << msgBuffer;
 
     if (prefix == L"FATAL")
     {

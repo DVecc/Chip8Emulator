@@ -21,6 +21,7 @@
 // Utilities
 #include "utils/logger.h"
 #include <chrono>
+#include <filesystem>
 
 // CONSTANTS
 const uint32_t WIDTH = 800;
@@ -33,28 +34,13 @@ bool framebufferResized = false;
 
 
 
-static void vk_compile_shader(char *shaderPath, char *sprivPath)
-{
-    ASSERT(shaderPath, L"No shader path supplied");
-    ASSERT(sprivPath, L"No spriv path supplied");
-
-    char command[320] = {};
-    sprintf_s(command, sizeof(command), "C:\\VulkanSDK\\1.4.309.0\\Bin\\glslc.exe %s -o %s", shaderPath, sprivPath);
-
-    int result = system(command);
-
-    ASSERT(!result, L"Failed to compile shader: %s", shaderPath);
-}
-
-int main()
+int main(int argc, char** argv)
 {
     try
     {
-        #ifdef DEBUG
-        vk_compile_shader("C:\\Users\\Vincent\\Desktop\\Chip8Emulator\\src\\shaders\\shader.vert", "C:\\Users\\Vincent\\Desktop\\Chip8Emulator\\src\\shaders\\vert.spv");
-        vk_compile_shader("C:\\Users\\Vincent\\Desktop\\Chip8Emulator\\src\\shaders\\shader.frag", "C:\\Users\\Vincent\\Desktop\\Chip8Emulator\\src\\shaders\\frag.spv");
-        #endif // DEBUG
-
+        if (argc != 2) { std::cerr << "Usage: Chip8Emulator.exe <ROM path>\n"; return EXIT_FAILURE; }
+        const auto romPath = std::filesystem::absolute(argv[1]);
+        std::filesystem::current_path(std::filesystem::absolute(argv[0]).parent_path());
         Chip8Emulator emulator = {};
         VK_Renderer renderer = {};
         running = true;
@@ -63,20 +49,24 @@ int main()
         {
             LOG_FATAL(L"Failed to create window");
         }
+        emulator.LoadROM(romPath.string().c_str());
         renderer.initVulkan(emulator.window);
         emulator.Chip8Init();
         platform_setInput(&emulator);
-        emulator.LoadROM("src/Rush Hour [Hap, 2006].ch8");
-        auto lastCycleTime = std::chrono::high_resolution_clock::now();
+        auto lastCycleTime = std::chrono::steady_clock::now();
 
         while (running)
         {
             platform_update_window(emulator.window);
 
-            auto currentTime = std::chrono::high_resolution_clock::now();
+            uint32_t windowWidth, windowHeight;
+            platform_get_window_size(emulator.window, &windowWidth, &windowHeight);
+            if (!windowWidth || !windowHeight) { Sleep(10); continue; }
+            Sleep(1);
+            auto currentTime = std::chrono::steady_clock::now();
 		    float dt = std::chrono::duration<float, std::chrono::milliseconds::period>(currentTime - lastCycleTime).count();
 
-            if (dt > 1000 / 60)
+            if (dt > 1000.0f / 60.0f)
             {
                 if (running)
                 {
@@ -86,6 +76,7 @@ int main()
                         emulator.cycle();
                       }
                     
+                    emulator.tickTimers();
                     renderer.drawFrame(emulator.window, &framebufferResized, emulator.gfx);
                 }
             }
@@ -94,15 +85,14 @@ int main()
         vkDeviceWaitIdle(renderer.device);
         // Cleanup 
         renderer.cleanup();
+        emulator.ShutdownSound();
 
         
 
-    } catch ( const std::exception) 
+    } catch ( const std::exception& error)
     {
-        return EXIT_FAILURE;
+        std::cerr << error.what() << std::endl; return EXIT_FAILURE;
     }
     
     return EXIT_SUCCESS;
 }
-
-

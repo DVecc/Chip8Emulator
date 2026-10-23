@@ -1,11 +1,16 @@
-#include "chip8Emulator.h"
 
+#define MA_DATA_SOURCE_ENABLED
+#define MINIAUDIO_IMPLEMENTATION
+#define MA_ENABLE_GENERATION
+
+#include "chip8Emulator.h"
 void Chip8Emulator::Chip8Init()
 {
 	pc = START_ADDRESS;
 
 	std::random_device rd;
     rng = std::default_random_engine(rd());
+	InitSound();
 
 	const unsigned int FONTSET_SIZE = 80;
 
@@ -53,7 +58,7 @@ void Chip8Emulator::Chip8Init()
 		table[0xE] = &Chip8Emulator::TableE;
 		table[0xF] = &Chip8Emulator::TableF;
 
-		for (size_t i = 0; i <= 0xE; i++)
+		for (size_t i = 0; i < 16; i++)
 		{
 			table0[i] = &Chip8Emulator::OP_NULL;
 			table8[i] = &Chip8Emulator::OP_NULL;
@@ -76,7 +81,7 @@ void Chip8Emulator::Chip8Init()
 		tableE[0x1] = &Chip8Emulator::OP_ExA1;
 		tableE[0xE] = &Chip8Emulator::OP_Ex9E;
 
-		for (size_t i = 0; i <= 0x65; i++)
+		for (size_t i = 0; i < 256; i++)
 		{
 			tableF[i] = &Chip8Emulator::OP_NULL;
 		}
@@ -100,7 +105,8 @@ void Chip8Emulator::LoadROM(char const* filename)
 	if (file.is_open())
 	{
 		std::streampos size = file.tellg();
-		char* buffer = new char[size];
+		if (size <= 0 || size > 4096 - START_ADDRESS) throw std::runtime_error("ROM size must be 1..3584 bytes");
+        char* buffer = new char[size];
 
 		file.seekg(0, std::ios::beg);
 		file.read(buffer, size);
@@ -141,30 +147,40 @@ void Chip8Emulator::TableF()
 		((*this).*(tableF[opcode & 0x00FFu]))();
 	}
 	 
-void Chip8Emulator::OP_NULL()
-	{}
+void Chip8Emulator::OP_NULL() { throw std::runtime_error("Unsupported CHIP-8 opcode"); }
 
 void Chip8Emulator::cycle()
 {
 	memcpy(keypad, stagingKeypad, sizeof(keypad));
 	
-	// Fetch
+	if (pc >= sizeof(memory) - 1) throw std::runtime_error("CHIP-8 PC out of range");
+    // Fetch
 	opcode = (memory[pc] << 8u) | memory[pc + 1];
 
 	// Decode and Execute
 	((*this).*(table[(opcode & 0xF000u) >> 12u]))();
 
-	// Decrement the delay timer if it's been set
+	}
+
+void Chip8Emulator::tickTimers()
+{
+    // Decrement the delay timer if it's been set
 	if (delayTimer > 0)
 	{
 		--delayTimer;
 	}
 
 	// Decrement the sound timer if it's been set
-	if (soundTimer > 0)
-	{
-		--soundTimer;
-	}
+	if (soundTimer > 0) {
+    if (soundInitialized && !ma_sound_is_playing(&beepSound)) {
+        ma_sound_start(&beepSound);
+    }
+    --soundTimer;
+} else {
+    if (soundInitialized) {
+        ma_sound_stop(&beepSound);
+    }
+}
 
 }
 
@@ -536,4 +552,36 @@ void Chip8Emulator::onKeyDown(uint8_t chip8Key) {
 
 void Chip8Emulator::onKeyUp(uint8_t chip8Key) {
     stagingKeypad[chip8Key] = 0;
+}
+
+bool Chip8Emulator::InitSound()
+{
+    if (ma_engine_init(NULL, &audioEngine) != MA_SUCCESS) {
+        return false;
+    }
+
+    ma_waveform_config config = ma_waveform_config_init(ma_format_f32, 1, 44100, ma_waveform_type_sine, 0.2f, 440);
+    if (ma_waveform_init(&config, &waveform) != MA_SUCCESS) {
+        ma_engine_uninit(&audioEngine);
+        return false;
+    }
+
+	  if (ma_sound_init_from_data_source(&audioEngine, &waveform, 0, NULL, &beepSound) != MA_SUCCESS) {
+        ma_waveform_uninit(&waveform);
+        ma_engine_uninit(&audioEngine);
+        return false;
+    }
+
+    soundInitialized = true;
+    return true;
+}
+
+void Chip8Emulator::ShutdownSound()
+{
+    if (soundInitialized) {
+        ma_sound_uninit(&beepSound);
+		ma_waveform_uninit(&waveform);
+        ma_engine_uninit(&audioEngine);
+        soundInitialized = false;
+    }
 }

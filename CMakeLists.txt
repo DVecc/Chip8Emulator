@@ -1,0 +1,28 @@
+cmake_minimum_required(VERSION 3.22)
+project(Chip8Emulator LANGUAGES CXX)
+if(NOT WIN32)
+  message(FATAL_ERROR "This renderer requires Win32")
+endif()
+find_package(Vulkan REQUIRED COMPONENTS glslc)
+add_executable(Chip8Emulator src/main.cpp src/emulator/chip8Emulator.cpp src/renderer/vk_renderer.cpp src/windows_platform/win32_platform.cpp)
+target_compile_features(Chip8Emulator PRIVATE cxx_std_17)
+target_compile_definitions(Chip8Emulator PRIVATE WINDOWS_BUILD UNICODE _UNICODE)
+target_include_directories(Chip8Emulator PRIVATE glm)
+target_link_libraries(Chip8Emulator PRIVATE Vulkan::Vulkan user32 gdi32 ole32)
+foreach(stage vert frag)
+  add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shaders/${stage}.spv"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/shaders"
+    COMMAND Vulkan::glslc "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/shader.${stage}" -o "${CMAKE_CURRENT_BINARY_DIR}/shaders/${stage}.spv"
+    DEPENDS "src/shaders/shader.${stage}")
+  target_sources(Chip8Emulator PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/shaders/${stage}.spv")
+endforeach()
+add_custom_command(TARGET Chip8Emulator POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_BINARY_DIR}/shaders" "$<TARGET_FILE_DIR:Chip8Emulator>/shaders")
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(chip8_core_tests tests/core_tests.cpp src/emulator/chip8Emulator.cpp)
+  target_compile_features(chip8_core_tests PRIVATE cxx_std_17)
+  target_compile_definitions(chip8_core_tests PRIVATE WINDOWS_BUILD UNICODE _UNICODE NOMINMAX)
+  target_link_libraries(chip8_core_tests PRIVATE user32 ole32)
+  add_test(NAME chip8_core COMMAND chip8_core_tests)
+endif()

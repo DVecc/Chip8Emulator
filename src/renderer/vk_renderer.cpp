@@ -39,7 +39,7 @@
 bool VK_Renderer::initVulkan(void* window)
 {
     createInstance();
-    setupDebugMessenger();
+    if (ENABLE_VALIDATION_LAYERS) setupDebugMessenger();
     createSurface(window);
     pickPhysicalDevice();
     createLogicalDevice();
@@ -588,8 +588,8 @@ void VK_Renderer::createRenderPass()
 
 void VK_Renderer::createGraphicsPipeline() 
 {
-    auto vertShaderCode = readFile("src/shaders/vert.spv");
-    auto fragShaderCode = readFile("src/shaders/frag.spv");
+    auto vertShaderCode = readFile("shaders/vert.spv");
+    auto fragShaderCode = readFile("shaders/frag.spv");
 
     VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
     VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
@@ -889,7 +889,7 @@ void VK_Renderer::drawFrame(void* window, bool* framebufferResized, uint8_t* chi
 void VK_Renderer::recreateSwapChain(void* window) {
     uint32_t width = 0, height = 0;
     #ifdef WINDOWS_BUILD
-        platform_get_window_size((HWND)window, &height, &width);
+        platform_get_window_size((HWND)window, &width, &height);
     #endif
     if (width == 0 || height == 0)
     {
@@ -953,7 +953,7 @@ uint32_t VK_Renderer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags 
             return i;
         }
     }
-    LOG_ERROR(L"Failed to find suitable Memory Type");
+    throw std::runtime_error("Failed to find suitable Vulkan memory type");
 }
 
 void VK_Renderer::createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory) 
